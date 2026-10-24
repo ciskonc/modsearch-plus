@@ -8,7 +8,7 @@
 
 <p align="center">🥇 <b>The strongest free web search plugin for DeepSeek Harness (dsh)</b> 🥇</p>
 
-<p align="center">Engines: <b>Firecrawl</b> (keyless, default) · <b>Keenable</b> (keyless) · <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>Grok (X)</b> · <b>local</b>, with automatic failover</p>
+<p align="center">Engines: <b>Firecrawl</b> (keyless, default) · <b>Keenable</b> (keyless) · <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>MiniMax</b> · <b>Zhipu GLM</b> · <b>Grok (X)</b> · <b>local</b>, with automatic failover</p>
 
 <p align="center">
   <a href="./README.zh-CN.md">简体中文</a> ·
@@ -21,8 +21,8 @@
 
 <p align="center">
   <a href="https://x.com/liustack"><img src="https://img.shields.io/badge/follow-%40liustack-black?style=flat-square&logo=x&logoColor=white" alt="Follow @liustack on X"></a>
-  <a href="https://www.npmjs.com/package/@liustack/modsearch"><img src="https://img.shields.io/npm/v/@liustack/modsearch?style=flat-square&label=npm&color=cb3837" alt="npm"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@liustack/modsearch?style=flat-square" alt="Node.js"></a>
+  <a href="https://www.npmjs.com/package/@ciskonc/modsearch"><img src="https://img.shields.io/npm/v/@ciskonc/modsearch?style=flat-square&label=npm&color=cb3837" alt="npm"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@ciskonc/modsearch?style=flat-square" alt="Node.js"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/Not%20backed%20by-Y%20Combinator-FF6600?style=flat-square&logo=ycombinator&logoColor=white" alt="Not backed by Y Combinator">
   <img src="https://img.shields.io/badge/users-unknown-lightgrey?style=flat-square" alt="Users unknown">
@@ -36,10 +36,10 @@ Hit a problem? [Open an issue](https://github.com/liustack/modsearch/issues/new/
 
 ## Features
 
-- **🥇 The strongest free web search plugin for DeepSeek Harness (dsh):** one command installs it, `npx -y @deepseek-ai/dsh plugin --profile web add @liustack/modsearch@5.10.10`. In the desktop app's Add plugin dialog, enter `@liustack/modsearch`, not the GitHub URL. Details in [harness setup](docs/harness-setup.md#deepseek-harness-dsh).
+- **🥇 The strongest free web search plugin for DeepSeek Harness (dsh):** one command installs it, `npx -y @deepseek-ai/dsh plugin --profile web add @ciskonc/modsearch@5.10.11`. In the desktop app's Add plugin dialog, enter `@ciskonc/modsearch`, not the GitHub URL. Details in [harness setup](docs/harness-setup.md#deepseek-harness-dsh).
 - **Free out of the box, no signup.** Search and page fetch run on Firecrawl Keyless by default: [1,000 free credits/month](https://www.firecrawl.dev/blog/firecrawl-keyless-launch), no account, no API key, no card. Every fallback channel is free too: Antigravity CLI needs only a browser sign-in, and Tavily, Exa, and a free Firecrawl key each add their own monthly quota with no card required.
 - **Automatic failover.** When a channel fails or exhausts its quota, the next one takes over.
-- **Per-engine key rotation.** Give Tavily, Exa, Firecrawl, or Keenable multiple comma-separated keys. Authentication, rate-limit, and quota failures rotate to the next key before the engine chain falls back.
+- **Per-engine key rotation.** Give Tavily, Exa, Firecrawl, Keenable, MiniMax, or Zhipu multiple comma-separated keys. Authentication, rate-limit, and quota failures rotate to the next key before the engine chain falls back.
 - **Searches X (Twitter).** With Grok Build installed, ModSearch queries the corpus that web indexes cannot reach.
 - **Install once, use everywhere.** Works in Claude Code, Codex, Pi, and OpenCode.
 
@@ -74,10 +74,13 @@ Firecrawl and Keenable work with zero setup. Every other engine is one command a
 | Antigravity CLI | web search + page fetch | free, browser sign-in | install `agy` and sign in |
 | Tavily | web search | 1,000 credits/month, no card | `modsearch config set tavily.apiKey <key>` |
 | Exa | web search | $10/month recurring credit (~1,400 searches), no card | `modsearch config set exa.apiKey <key>` |
+| MiniMax | web search | M Plan subscription key, model-free search endpoint, no model call | `modsearch config set minimax.apiKey <key>` |
+| MiniMax web_search | web search + written answer | runs a model call with MiniMax's server-side web_search tool (0.03 CNY a call) | `modsearch config set minimax-websearch.apiKey <key>` |
+| Zhipu GLM | web search | Web Search API, billed per call (0.01 CNY a call from `search_std`) | `modsearch config set glm.apiKey <key>` |
 | Grok Build | X (Twitter) search | rides SuperGrok or X Premium | install `grok` and sign in |
 | local | page fetch | built in, nothing to install | nothing |
 
-Keys can also come from the environment (`TAVILY_API_KEY`, `EXA_API_KEY`, `FIRECRAWL_API_KEY`, `KEENABLE_API_KEY`). One engine can take multiple keys as a comma-separated value such as `key-one,key-two`, in either the config file or its environment variable. Multiple engines configured means automatic failover, best first. Every engine participates by default. Exclude one with `modsearch config set tavily.enabled false`. Using a Tavily-, Exa-, Firecrawl-, or Keenable-compatible third-party or self-hosted endpoint? Point the engine at it: `modsearch config set tavily.baseURL <url>`. Official endpoints stay built into the code and are never written as default config. Every knob, engine by engine, is in the [configuration guide](skills/modsearch/references/configure.md).
+Keys can also come from the environment (`TAVILY_API_KEY`, `EXA_API_KEY`, `FIRECRAWL_API_KEY`, `KEENABLE_API_KEY`, `MINIMAX_API_KEY`, `ZAI_API_KEY`). One engine can take multiple keys as a comma-separated value such as `key-one,key-two`, in either the config file or its environment variable. Multiple engines configured means automatic failover, best first. Every engine participates by default. Exclude one with `modsearch config set tavily.enabled false`. Using a Tavily-, Exa-, Firecrawl-, Keenable-, MiniMax-, or Zhipu-compatible third-party or self-hosted endpoint? Point the engine at it: `modsearch config set tavily.baseURL <url>`. Official endpoints stay built into the code and are never written as default config. Every knob, engine by engine, is in the [configuration guide](skills/modsearch/references/configure.md).
 
 ## Installation
 
@@ -85,7 +88,7 @@ Keys can also come from the environment (`TAVILY_API_KEY`, `EXA_API_KEY`, `FIREC
 
 > Install and configure the modsearch skill following INSTALL.md at https://github.com/liustack/modsearch, then run the health check and tell me the result.
 
-On DeepSeek Harness (dsh), send the same message. INSTALL.md recognizes dsh and switches to the native plugin instead of the skill, so dsh's own `web_search` runs on modsearch. In the browser UI your AI installs it. The desktop app only takes plugins from its own window, so there your AI asks you to open **Plugins**, click **Add plugin**, and enter `@liustack/modsearch`.
+On DeepSeek Harness (dsh), send the same message. INSTALL.md recognizes dsh and switches to the native plugin instead of the skill, so dsh's own `web_search` runs on modsearch. In the browser UI your AI installs it. The desktop app only takes plugins from its own window, so there your AI asks you to open **Plugins**, click **Add plugin**, and enter `@ciskonc/modsearch`.
 
 Prefer a direct command? Install the same skill through [skills.sh](https://skills.sh/):
 
@@ -102,7 +105,7 @@ agy                                                           # sign in, then ex
 
 Picked a key instead? Send one line to your AI: "set my tavily key to tvly-...".
 
-dsh users have a path that never touches the command line. Open **Plugins** in the dsh sidebar and pick `@liustack/modsearch`: pick the preferred engine, fill in an API key or a self-hosted endpoint, tick which engines join failover, hit save and it takes effect. On dsh releases before 0.1.6-alpha.2 the same card lives under Settings → Plugins → Plugin config.
+dsh users have a path that never touches the command line. Open **Plugins** in the dsh sidebar and pick `@ciskonc/modsearch`: pick the preferred engine, fill in an API key or a self-hosted endpoint, tick which engines join failover, hit save and it takes effect. On dsh releases before 0.1.6-alpha.2 the same card lives under Settings → Plugins → Plugin config.
 
 ![The ModSearch page in the dsh Plugins panel, shown in Chinese: pick the preferred engine, fill in an API key and endpoint, tick the engines that join failover](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-settings-card.jpg)
 
@@ -155,7 +158,7 @@ Follow the WeChat official account **liustack** (Chinese-language): AI tools, pr
 
 ## Disclaimer
 
-ModSearch is MIT-licensed, so use is not restricted. The author gives no warranty and no endorsement for any particular use, commercial or otherwise. The upstream engines it drives (Antigravity CLI, Tavily, Exa, Firecrawl, Keenable, Grok Build) each carry their own terms and quotas, and complying with them is the user's responsibility.
+ModSearch is MIT-licensed, so use is not restricted. The author gives no warranty and no endorsement for any particular use, commercial or otherwise. The upstream engines it drives (Antigravity CLI, Tavily, Exa, Firecrawl, Keenable, MiniMax, Zhipu GLM, Grok Build) each carry their own terms and quotas, and complying with them is the user's responsibility.
 
 ## License
 

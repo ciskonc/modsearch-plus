@@ -2,9 +2,11 @@ import type { EngineSettings, Role } from '../config.ts';
 import { antigravityCliProvider } from './antigravity.ts';
 import { exaProvider } from './exa.ts';
 import { firecrawlProvider } from './firecrawl.ts';
+import { glmProvider } from './glm.ts';
 import { grokCliProvider } from './grok.ts';
 import { httpFetchProvider } from './httpFetch.ts';
 import { keenableProvider } from './keenable.ts';
+import { minimaxProvider, minimaxWebSearchProvider } from './minimax.ts';
 import { tavilyProvider } from './tavily.ts';
 
 export type RunMode = 'search' | 'fetch';
@@ -87,6 +89,9 @@ const ENGINES: Record<string, SearchEngine> = {
   exa: exaProvider,
   firecrawl: firecrawlProvider,
   keenable: keenableProvider,
+  minimax: minimaxProvider,
+  'minimax-websearch': minimaxWebSearchProvider,
+  glm: glmProvider,
   'grok-cli': grokCliProvider,
   grok: grokCliProvider,
   // The built-in direct fetcher, canonically `local`. `http` and `direct` stay
@@ -107,7 +112,21 @@ export const ROLE_PREFERENCE: Record<Role, string[]> = {
   // daily allowance runs out. agy synthesizes and cites but its weekly quota
   // is small, so it backs the keyless pair up rather than fronting the chain.
   // Tavily and Exa are keyed backups.
-  search: ['firecrawl', 'keenable', 'antigravity-cli', 'tavily', 'exa'],
+  // The China-market engines come last: they cost real money or plan quota
+  // per call, so the free and flat-rate engines get the first attempt and
+  // these only answer when those are missing or spent. A user who wants one
+  // of them first sets it as the configured engine, which is a soft
+  // preference and still falls back.
+  search: [
+    'firecrawl',
+    'keenable',
+    'antigravity-cli',
+    'tavily',
+    'exa',
+    'minimax',
+    'glm',
+    'minimax-websearch',
+  ],
   // Firecrawl runs a cloud browser for JS-heavy pages, keyless by default
   // (opt out with firecrawl.keylessFetch false). agy extracts to a focus. The
   // local needs no setup and returns the page as served, so it stays the

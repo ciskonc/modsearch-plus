@@ -80,6 +80,9 @@ const ENV_BINDINGS: Record<string, Partial<Record<StringEngineSetting, string>>>
   exa: { apiKey: 'EXA_API_KEY', baseURL: 'EXA_BASE_URL' },
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
+  glm: { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
+  minimax: { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
+  'minimax-websearch': { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
 };
 
 const SETTABLE_ENGINE_FIELDS: Array<keyof EngineSettings> = [
@@ -110,6 +113,9 @@ const CANONICAL_ENGINE: Record<string, string> = {
   grok: 'grok-cli',
   http: 'local',
   direct: 'local',
+  zhipu: 'glm',
+  bigmodel: 'glm',
+  'minimax-search': 'minimax',
 };
 
 /**

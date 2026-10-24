@@ -44,7 +44,7 @@ describe('dsh plugin bundle', () => {
     expect(pkg.files).toContain('dsh');
     expect(pkg.files).toContain('cordis.patch.yml');
     const patch = fs.readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf-8');
-    expect(patch).toContain("name: '@liustack/modsearch'");
+    expect(patch).toContain("name: '@ciskonc/modsearch'");
     expect(patch).toContain('searchProvider: modsearch');
   });
 
@@ -233,7 +233,7 @@ describe('dsh web search provider', () => {
     process.env.MODSEARCH_DSH_CLI = path.join(dir, 'dist', 'main.js');
     const { providers } = await load();
     await expect(providers[0].search({ query: 'anything' })).rejects.toThrow(
-      /build is missing.*GitHub.*@liustack\/modsearch/s,
+      /build is missing.*GitHub.*@ciskonc\/modsearch/s,
     );
   });
 });

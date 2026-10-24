@@ -184,7 +184,7 @@ function registerXSearchTool(ctx) {
   ctx.tools.register({
     name: 'x_search',
     description:
-      'Search X (Twitter) posts through the modsearch bridge. Use for questions about posts, threads, accounts, or discussions on X: what someone posted, reactions to an event, sentiment in a community. Returns structured evidence with a summary, per-post items with URLs, and an uncertainty list. A degraded status means X itself was unreachable and a keyless web search answered second-hand. Run `npx @liustack/modsearch doctor` to inspect the resolved engines.',
+      'Search X (Twitter) posts through the modsearch bridge. Use for questions about posts, threads, accounts, or discussions on X: what someone posted, reactions to an event, sentiment in a community. Returns structured evidence with a summary, per-post items with URLs, and an uncertainty list. A degraded status means X itself was unreachable and a keyless web search answered second-hand. Run `npx @ciskonc/modsearch doctor` to inspect the resolved engines.',
     parameters: {
       type: 'object',
       properties: {
@@ -256,7 +256,7 @@ function registerReadPageTool(ctx) {
   ctx.tools.register({
     name: 'read_page',
     description:
-      'Read one web page through the modsearch bridge. Use when a message references a specific http(s) URL whose content matters: docs, an article, a changelog, a thread. Returns structured evidence with a summary, the extracted content, outgoing links, uncertainty, and operational warnings such as cloud fetching. Pass "query" to focus the reading on one question. Page reading needs no engine setup. Run `npx @liustack/modsearch doctor` to inspect the resolved route.',
+      'Read one web page through the modsearch bridge. Use when a message references a specific http(s) URL whose content matters: docs, an article, a changelog, a thread. Returns structured evidence with a summary, the extracted content, outgoing links, uncertainty, and operational warnings such as cloud fetching. Pass "query" to focus the reading on one question. Page reading needs no engine setup. Run `npx @ciskonc/modsearch doctor` to inspect the resolved route.',
     parameters: {
       type: 'object',
       properties: {
@@ -339,7 +339,7 @@ function cliPath() {
     throw new Error(
       `modsearch's CLI build is missing (${cli}). This happens when the plugin was ` +
         'installed from its GitHub repository, which ships source only. Remove the ' +
-        'plugin and add it again by package name: @liustack/modsearch',
+        'plugin and add it again by package name: @ciskonc/modsearch',
     );
   }
   return cli;
@@ -367,7 +367,7 @@ async function runCli(args, signal) {
       .join('; ');
     throw new Error(
       `modsearch could not reach the requested source${attempts ? ` (${attempts})` : ''}. ` +
-        'Run `npx @liustack/modsearch doctor` in a terminal to check the engine setup.',
+        'Run `npx @ciskonc/modsearch doctor` in a terminal to check the engine setup.',
     );
   }
   return entry;
@@ -460,18 +460,30 @@ const CARD_ENGINES = [
   'exa',
   'firecrawl',
   'keenable',
+  'minimax',
+  'minimax-websearch',
+  'glm',
   'grok-cli',
   'local',
 ];
 /** The HTTP engines: the only ones with a key and an endpoint to configure. */
-const KEYED_ENGINES = ['tavily', 'exa', 'firecrawl', 'keenable'];
+const KEYED_ENGINES = [
+  'tavily',
+  'exa',
+  'firecrawl',
+  'keenable',
+  'minimax',
+  'minimax-websearch',
+  'glm',
+];
 /**
  * Engines whose `model` setting a run actually reads. The others are shown
  * without the field rather than with one nothing is behind: the HTTP engines
  * ignore it, and grok-cli follows whatever Grok Build is signed in
- * with.
+ * with. The glm engine reads it as the search engine code, and
+ * minimax-websearch reads it as the model that runs the search.
  */
-const MODEL_ENGINES = ['antigravity-cli'];
+const MODEL_ENGINES = ['antigravity-cli', 'minimax-websearch', 'glm'];
 /**
  * Every accepted spelling, mirroring CANONICAL_ENGINE in src/config.ts.
  * Settings saved under an alias are the same engine's settings, so the card
@@ -483,6 +495,9 @@ const ENGINE_ALIASES = {
   grok: 'grok-cli',
   http: 'local',
   direct: 'local',
+  zhipu: 'glm',
+  bigmodel: 'glm',
+  'minimax-search': 'minimax',
 };
 /**
  * The variables that override the file per field, mirroring ENV_BINDINGS in
@@ -494,6 +509,9 @@ const ENGINE_ENV_BINDINGS = {
   exa: { apiKey: 'EXA_API_KEY', baseURL: 'EXA_BASE_URL' },
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
+  glm: { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
+  minimax: { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
+  'minimax-websearch': { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
 };
 
 /** The canonical engine a stored name means, or '' when it names none. */

@@ -130,6 +130,26 @@ function configuredApiKeys(
   return { count: fileKeys.length, source: fileKeys.length > 0 ? 'file' : null };
 }
 
+/**
+ * Keys from the first environment variable that holds one, else the file.
+ * The China-market engines are read under several names because harnesses and
+ * coding plans ship the key under their own name.
+ */
+function configuredApiKeysFrom(
+  envNames: readonly string[],
+  env: NodeJS.ProcessEnv,
+  fromFile: string | undefined,
+): { count: number; source: 'env' | 'file' | null } {
+  for (const name of envNames) {
+    const envKeys = splitApiKeys(env[name]);
+    if (envKeys.length > 0) {
+      return { count: envKeys.length, source: 'env' };
+    }
+  }
+  const fileKeys = splitApiKeys(fromFile);
+  return { count: fileKeys.length, source: fileKeys.length > 0 ? 'file' : null };
+}
+
 function apiKeyPresentReason(count: number, source: 'env' | 'file'): string {
   return `API key present (${count} ${count === 1 ? 'key' : 'keys'}, from ${source})`;
 }
@@ -266,6 +286,44 @@ function diagnoseEngine(
           ? 'keyless fetch (default): public pages are read by a cloud browser, no key or signup needed. Opt out with: modsearch config set firecrawl.keylessFetch false'
           : 'keyless fetch is switched off (firecrawl.keylessFetch false), so Firecrawl is excluded from automatic page fetch.',
       ...(ready ? {} : { fix: 'modsearch config set firecrawl.keylessFetch true' }),
+    };
+  }
+
+  if (engine.name === 'glm') {
+    const { count, source: keySource } = configuredApiKeysFrom(
+      ['ZAI_API_KEY', 'ZHIPUAI_API_KEY', 'ZAI_CODING_CN_API_KEY', 'BIGMODEL_API_KEY'],
+      env,
+      config.engines?.glm?.apiKey,
+    );
+    const ready = count > 0;
+    return {
+      engine: engine.name,
+      enabled,
+      ready,
+      keySource,
+      reason: keySource
+        ? `${apiKeyPresentReason(count, keySource)}. The Web Search API is billed per call against the account balance, so an unfunded account answers 429 (code 1113).`
+        : 'no API key (not in ZAI_API_KEY or the config file)',
+      ...(ready ? {} : { fix: 'modsearch config set glm.apiKey <key>' }),
+    };
+  }
+
+  if (engine.name === 'minimax' || engine.name === 'minimax-websearch') {
+    const { count, source: keySource } = configuredApiKeysFrom(
+      ['MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY'],
+      env,
+      config.engines?.[engine.name]?.apiKey,
+    );
+    const ready = count > 0;
+    return {
+      engine: engine.name,
+      enabled,
+      ready,
+      keySource,
+      reason: keySource
+        ? `${apiKeyPresentReason(count, keySource)}. The key only works on the host of its own region: api.minimax.cn for mainland accounts, api.minimax.io for global ones.`
+        : 'no API key (not in MINIMAX_API_KEY or the config file)',
+      ...(ready ? {} : { fix: `modsearch config set ${engine.name}.apiKey <key>` }),
     };
   }
 

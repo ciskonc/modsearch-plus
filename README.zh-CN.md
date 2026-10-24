@@ -8,7 +8,7 @@
 
 <p align="center">🥇 <b>全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件</b> 🥇</p>
 
-<p align="center">引擎：<b>Firecrawl</b>（免注册，默认）· <b>Keenable</b>（免注册）· <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>Grok（X）</b> · <b>local</b>，自动故障转移</p>
+<p align="center">引擎：<b>Firecrawl</b>（免注册，默认）· <b>Keenable</b>（免注册）· <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>MiniMax</b> · <b>智谱 GLM</b> · <b>Grok（X）</b> · <b>local</b>，自动故障转移</p>
 
 <p align="center">
   <a href="./README.md">English</a> ·
@@ -21,8 +21,8 @@
 
 <p align="center">
   <a href="https://x.com/liustack"><img src="https://img.shields.io/badge/follow-%40liustack-black?style=flat-square&logo=x&logoColor=white" alt="Follow @liustack on X"></a>
-  <a href="https://www.npmjs.com/package/@liustack/modsearch"><img src="https://img.shields.io/npm/v/@liustack/modsearch?style=flat-square&label=npm&color=cb3837" alt="npm"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@liustack/modsearch?style=flat-square" alt="Node.js"></a>
+  <a href="https://www.npmjs.com/package/@ciskonc/modsearch"><img src="https://img.shields.io/npm/v/@ciskonc/modsearch?style=flat-square&label=npm&color=cb3837" alt="npm"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@ciskonc/modsearch?style=flat-square" alt="Node.js"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/Not%20backed%20by-Y%20Combinator-FF6600?style=flat-square&logo=ycombinator&logoColor=white" alt="Not backed by Y Combinator">
   <img src="https://img.shields.io/badge/users-unknown-lightgrey?style=flat-square" alt="Users unknown">
@@ -36,10 +36,10 @@ DeepSeek 和 GLM 等模型没有联网能力或联网能力羸弱。ModSearch �
 
 ## 特性
 
-- **🥇 全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件：** 一条命令即刻安装 `npx -y @deepseek-ai/dsh plugin --profile web add @liustack/modsearch@5.10.10`。桌面版「添加插件」里填 `@liustack/modsearch`，不要填 GitHub 地址。细节见[接入指南](docs/harness-setup.zh-CN.md#deepseek-harness-dsh)。
+- **🥇 全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件：** 一条命令即刻安装 `npx -y @deepseek-ai/dsh plugin --profile web add @ciskonc/modsearch@5.10.11`。桌面版「添加插件」里填 `@ciskonc/modsearch`，不要填 GitHub 地址。细节见[接入指南](docs/harness-setup.zh-CN.md#deepseek-harness-dsh)。
 - **开箱免费，免注册。** 搜索和单页抓取默认跑在 Firecrawl 免注册通道上：[每月 1,000 免费 credits](https://www.firecrawl.dev/blog/firecrawl-keyless-launch)，没有账号、没有 API key、没有绑卡。后备通道也全部免费：Antigravity CLI 只需浏览器登录，Tavily、Exa 和免费的 Firecrawl key 各带独立的月度额度，均不要求绑卡。
 - **自动故障转移。** 一个通道失败或额度耗尽时自动切换下一个。
-- **单引擎多密钥轮换。** Tavily、Exa、Firecrawl、Keenable 都可配置逗号分隔的多个密钥。鉴权、限流或配额失败时先轮换到下一个密钥，再按引擎链故障转移。
+- **单引擎多密钥轮换。** Tavily、Exa、Firecrawl、Keenable、MiniMax、智谱都可配置逗号分隔的多个密钥。鉴权、限流或配额失败时先轮换到下一个密钥，再按引擎链故障转移。
 - **可搜索 X（推特）。** 安装 Grok Build 后，可检索网页索引覆盖不到的 X 内容。
 - **一次安装，多端可用。** 支持 Claude Code、Codex、Pi、OpenCode。
 
@@ -74,10 +74,13 @@ Firecrawl 和 Keenable 零配置直接可用，其余引擎各一条命令。key
 | Antigravity CLI | 网页搜索 + 单页抓取 | 免费，浏览器登录 | 安装 `agy` 并登录 |
 | Tavily | 网页搜索 | 每月 1,000 credits，不绑卡 | `modsearch config set tavily.apiKey <key>` |
 | Exa | 网页搜索 | 每月 $10 循环额度（约 1,400 次），不绑卡 | `modsearch config set exa.apiKey <key>` |
+| MiniMax | 网页搜索 | M Plan 订阅 key，免模型搜索端点，不消耗模型调用 | `modsearch config set minimax.apiKey <key>` |
+| MiniMax web_search | 网页搜索 + 成文答案 | 跑一次模型调用，用 MiniMax 服务端 web_search 工具（每次 0.03 元） | `modsearch config set minimax-websearch.apiKey <key>` |
+| 智谱 GLM | 网页搜索 | Web Search API，按次计费（`search_std` 每次 0.01 元） | `modsearch config set glm.apiKey <key>` |
 | Grok Build | X（推特）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 `grok` 并登录 |
 | local | 单页抓取 | 内置，零安装 | 无需任何操作 |
 
-key 也可以走环境变量（`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API_KEY`、`KEENABLE_API_KEY`）。同一引擎可在配置文件或环境变量中写入逗号分隔的多个 key，例如 `key-one,key-two`。配了多个引擎就自动故障转移，好的优先。每个引擎默认都参与，可以用 `modsearch config set tavily.enabled false` 排除一个。想用 Tavily、Exa、Firecrawl、Keenable 兼容的第三方或自建端点？把引擎指过去即可：`modsearch config set tavily.baseURL <url>`。官方地址始终内置在代码里，不会作为默认配置写入文件。每个引擎的全部配置项见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
+key 也可以走环境变量（`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API_KEY`、`KEENABLE_API_KEY`、`MINIMAX_API_KEY`、`ZAI_API_KEY`）。同一引擎可在配置文件或环境变量中写入逗号分隔的多个 key，例如 `key-one,key-two`。配了多个引擎就自动故障转移，好的优先。每个引擎默认都参与，可以用 `modsearch config set tavily.enabled false` 排除一个。想用 Tavily、Exa、Firecrawl、Keenable、MiniMax、智谱兼容的第三方或自建端点？把引擎指过去即可：`modsearch config set tavily.baseURL <url>`。官方地址始终内置在代码里，不会作为默认配置写入文件。每个引擎的全部配置项见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
 
 ## 安装
 
@@ -85,7 +88,7 @@ key 也可以走环境变量（`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API
 
 > 按 https://github.com/liustack/modsearch 的 INSTALL.md 安装并配置 modsearch skill，完成后运行体检并把结果告诉我。
 
-DeepSeek Harness (dsh) 里发同一句话即可。INSTALL.md 会认出 dsh，改走原生插件而不是 skill，让 dsh 自带的 `web_search` 直接跑在 modsearch 上。浏览器版由 AI 直接装好。桌面版只接受从自己窗口里装插件，AI 会请你打开「插件」，点「添加插件」，填 `@liustack/modsearch`。
+DeepSeek Harness (dsh) 里发同一句话即可。INSTALL.md 会认出 dsh，改走原生插件而不是 skill，让 dsh 自带的 `web_search` 直接跑在 modsearch 上。浏览器版由 AI 直接装好。桌面版只接受从自己窗口里装插件，AI 会请你打开「插件」，点「添加插件」，填 `@ciskonc/modsearch`。
 
 也可以直接通过 [skills.sh](https://skills.sh/) 安装同一个 skill：
 
@@ -102,7 +105,7 @@ agy                                                           # 浏览器完成�
 
 选了 key 的话，发一句话给 AI 即可：「把我的 tavily key 设成 tvly-...」。
 
-dsh 用户还有一条不碰命令行的路。在 dsh 侧栏点开「插件」，进入 `@liustack/modsearch`：选首选引擎、填 API 密钥和自建接口地址、勾选哪些引擎参与故障转移，点保存就生效。0.1.6-alpha.2 之前的 dsh 版本里，同一张卡片在设置页的「插件 → 插件配置」里。
+dsh 用户还有一条不碰命令行的路。在 dsh 侧栏点开「插件」，进入 `@ciskonc/modsearch`：选首选引擎、填 API 密钥和自建接口地址、勾选哪些引擎参与故障转移，点保存就生效。0.1.6-alpha.2 之前的 dsh 版本里，同一张卡片在设置页的「插件 → 插件配置」里。
 
 ![dsh「插件」面板里的 ModSearch 页面：选首选引擎、填 API 密钥与接口地址、勾选参与故障转移的引擎](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-settings-card.jpg)
 
@@ -155,7 +158,7 @@ Clash、Clash Verge Rev、mihomo、Surge 的代理 fake-ip 模式开箱即用：
 
 ## 免责声明
 
-ModSearch 以 MIT 许可发布，使用不受限制。作者不对任何用途（含商业使用）提供保证与背书。上游引擎（Antigravity CLI、Tavily、Exa、Firecrawl、Keenable、Grok Build）各有自己的条款与额度，遵守这些约束由使用者负责。
+ModSearch 以 MIT 许可发布，使用不受限制。作者不对任何用途（含商业使用）提供保证与背书。上游引擎（Antigravity CLI、Tavily、Exa、Firecrawl、Keenable、MiniMax、智谱 GLM、Grok Build）各有自己的条款与额度，遵守这些约束由使用者负责。
 
 ## License
 
