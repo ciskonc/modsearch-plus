@@ -378,6 +378,15 @@ function candidatesForRole(role: Role, config: ModsearchConfig): SearchEngine[] 
       engines.push(engine);
     }
   }
+  // Mirror the router's priority ordering so the report shows the chain the
+  // way a run will actually walk it.
+  if (role === 'search') {
+    const priorityOf = (engine: SearchEngine): number => {
+      const priority = engineSettings(engine.name, config, {}).priority;
+      return priority === undefined ? Number.POSITIVE_INFINITY : priority;
+    };
+    engines.sort((a, b) => priorityOf(a) - priorityOf(b));
+  }
   return engines;
 }
 
