@@ -50,6 +50,24 @@ window.__ModuleLoader__.load({
     // labels.
     var TEXT = {
       en: {
+        trafficGreen: 'last call succeeded',
+        trafficRed: 'last call failed',
+        trafficGrey: 'never called',
+        aiSection: 'AI permissions',
+        allowEngines: 'Allow the AI to pin engines for a search',
+        allowParallel: 'Allow the AI to run parallel multi-engine searches',
+        aiHint:
+          'Off by default. Pinned engines cost only what you would spend yourself; a parallel run bills every whitelisted engine, so the two are separate switches.',
+        chainSection: 'Chain order & health',
+        chainHint:
+          'Drag arrows reorder the failover chain (top tried first). The dot is the last real call: green succeeded, red failed, grey never called. "P" joins the parallel set.',
+        probe: 'Test now',
+        probeConfirm:
+          'Run one real search on every enabled engine to refresh the lights? Each engine is really called and may bill (paid engines included).',
+        probing: 'Probing…',
+        parallel: 'P',
+        moveUp: 'Move up',
+        moveDown: 'Move down',
         title: 'Search engine (ModSearch)',
         subtitle: 'Search engine provider configuration.',
         // The heading on the Plugins page, which already names the plugin.
@@ -95,6 +113,24 @@ window.__ModuleLoader__.load({
         // 「视觉引擎（ModLens）」成对。
         title: '搜索引擎（ModSearch）',
         subtitle: '搜索引擎提供商配置。',
+        trafficGreen: '上次调用成功',
+        trafficRed: '上次调用失败',
+        trafficGrey: '从未调用',
+        aiSection: 'AI 权限',
+        allowEngines: '允许 AI 指定搜索引擎',
+        allowParallel: '允许 AI 并行调用多个搜索引擎',
+        aiHint:
+          '默认关闭。指定渠道只花你自己点名才会花的钱；并行会真实调用白名单里的每个引擎，所以两者分开控制。',
+        chainSection: '链序与健康',
+        chainHint:
+          '箭头调整故障转移顺序（越靠上越先尝试）。圆点是最近一次真实调用的结果：绿=成功，红=失败，灰=从未调用。"P" 表示参与并行。',
+        probe: '立即测试',
+        probeConfirm:
+          '对每个已启用的引擎各执行一次真实搜索来刷新状态灯？每个引擎都会被真实调用，付费引擎会产生实际费用。',
+        probing: '测试中…',
+        parallel: '并',
+        moveUp: '上移',
+        moveDown: '下移',
         section: '引擎设置',
         automatic: '自动（按故障转移顺序）',
         keylessSuffix: '（免注册免费）',
@@ -187,6 +223,19 @@ window.__ModuleLoader__.load({
               ENGINES.map((name) => [name, summary.engines?.[name]?.enabled !== false]),
             ),
         ),
+        // The AI permission switches and the parallel set, seeded from the
+        // file the way the engine fields are.
+        ai: Object.assign(
+          {},
+          {
+            allowEngines: summary.ai?.allowEngines === true,
+            allowParallel: summary.ai?.allowParallel === true,
+          },
+        ),
+        order: chainEngines(summary).slice(),
+        parallel: Object.fromEntries(
+          CHAIN_ENGINES.map((name) => [name, summary.engines?.[name]?.parallel === true]),
+        ),
       };
     }
 
@@ -239,6 +288,37 @@ window.__ModuleLoader__.load({
       });
       if (Object.keys(enabled).length > 0) {
         payload.enabled = enabled;
+      }
+      // AI permissions: carried only when one moved, and only the ones that
+      // moved.
+      var ai = {};
+      if ((draft.ai?.allowEngines === true) !== (summary.ai?.allowEngines === true)) {
+        ai.allowEngines = draft.ai?.allowEngines === true;
+      }
+      if ((draft.ai?.allowParallel === true) !== (summary.ai?.allowParallel === true)) {
+        ai.allowParallel = draft.ai?.allowParallel === true;
+      }
+      if (Object.keys(ai).length > 0) {
+        payload.ai = ai;
+      }
+      // The ordering: carried only when the visible order moved.
+      var order = Array.isArray(draft.order) ? draft.order : [];
+      var before = chainEngines(summary);
+      var moved = order.length === before.length && order.every((name, i2) => name === before[i2]) ? false : true;
+      if (moved && order.length > 0) {
+        payload.order = order;
+      }
+      // Parallel participation: only the engines whose flag moved.
+      var parallel = {};
+      CHAIN_ENGINES.forEach((name) => {
+        var wasIn = summary.engines?.[name]?.parallel === true;
+        var isIn = draft.parallel?.[name] === true;
+        if (isIn !== wasIn) {
+          parallel[name] = isIn;
+        }
+      });
+      if (Object.keys(parallel).length > 0) {
+        payload.parallel = parallel;
       }
       if (draft.engine !== summary.engine) {
         payload.engine = draft.engine;
@@ -492,6 +572,10 @@ window.__ModuleLoader__.load({
         var summaryState = react.useState(null);
         var draftState = react.useState(null);
         var noteState = react.useState('');
+        // The probe button's in-flight text; '' means idle.
+        var probeState = react.useState('');
+        var probeValue = probeState[0];
+        var setProbe = probeState[1];
         // The page already heads the form with the plugin's title, so the form
         // is open from the start there: a collapsed block under that title
         // would ask for the same click twice.
@@ -651,6 +735,13 @@ window.__ModuleLoader__.load({
             const chain = chainEngines(summary);
             // The same list savePayload measures, so the buttons can never
             // light up over a change no save would carry.
+            // The ordering as the card shows it, which is what a save would
+            // carry; a stable order that matches the file's own is no change.
+            const order = Array.isArray(draft.order) ? draft.order : chain;
+            const orderMoved =
+              chain.length === order.length
+                ? order.some((name, index) => name !== chain[index])
+                : true;
             const dirty =
               draft.engine !== summary.engine ||
               (canKey && (draft.apiKey !== '' || draft.baseURL !== pristine.baseURL)) ||
@@ -659,6 +750,14 @@ window.__ModuleLoader__.load({
                 (name) =>
                   (draft.enabled?.[name] !== false) !==
                   (summary.engines?.[name]?.enabled !== false),
+              ) ||
+              (draft.ai?.allowEngines === true) !== (summary.ai?.allowEngines === true) ||
+              (draft.ai?.allowParallel === true) !== (summary.ai?.allowParallel === true) ||
+              orderMoved ||
+              chain.some(
+                (name) =>
+                  (draft.parallel?.[name] === true) !==
+                  (summary.engines?.[name]?.parallel === true),
               );
 
             const set = (key, value) => {
@@ -697,14 +796,50 @@ window.__ModuleLoader__.load({
               : chain.length === 0
                 ? t.autoEmpty
                 : '';
-            const statusRows = chain.map((name) => {
+            // One row per engine: [up] [down] [light] name [P] [x]. The arrows
+            // are the drag ordering expressed with keys a keyboard can press;
+            // the light is the last real call's outcome, not a guess; P joins
+            // the parallel set; the checkbox is the failover participation it
+            // always was.
+            const move = (name, delta) => {
+              const current = Array.isArray(draft.order) ? draft.order.slice() : chain.slice();
+              const at = current.indexOf(name);
+              const to = at + delta;
+              if (at < 0 || to < 0 || to >= current.length) {
+                return;
+              }
+              current.splice(to, 0, current.splice(at, 1)[0]);
+              set('order', current);
+            };
+            const statusRows = order.map((name, position) => {
               const checked = draft.enabled?.[name] !== false;
+              const inParallel = draft.parallel?.[name] === true;
+              const record = summary.health?.[name];
+              const color = record
+                ? record.ok
+                  ? '#34a853'
+                  : '#ea4335'
+                : 'rgba(127,127,127,0.45)';
+              const light =
+                (record
+                  ? record.ok
+                    ? t.trafficGreen
+                    : `${t.trafficRed}${record.error ? `: ${String(record.error).slice(0, 140)}` : ''}`
+                  : t.trafficGrey) + (record?.at ? ` · ${record.at}` : '');
+              const box = (checked2, label, onChange, keyName) =>
+                h('input', {
+                  type: 'checkbox',
+                  checked: checked2,
+                  'aria-label': `${name} ${label}`,
+                  key: keyName,
+                  onChange,
+                });
               return h(
-                'label',
+                'div',
                 {
                   key: name,
                   style: {
-                    display: 'inline-flex',
+                    display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
                     minHeight: '32px',
@@ -714,38 +849,97 @@ window.__ModuleLoader__.load({
                     background: checked
                       ? 'var(--dsw-alias-bg-layer-3, rgba(127,127,127,0.08))'
                       : 'transparent',
-                    cursor: 'pointer',
                     fontSize: '13px',
                   },
                 },
-                // No aria-label. This label wraps exactly one control, so its
-                // text is the checkbox's accessible name, and that text is the
-                // whole row: an aria-label of just the engine name would name
-                // the box over the label and leave the aside beside it unread.
-                h('input', {
-                  type: 'checkbox',
-                  checked,
-                  onChange: (event) => {
-                    draftState[1](toggleEngine(draft, name, event.target.checked));
-                    noteState[1]('');
+                h(
+                  'span',
+                  {
+                    style: { display: 'inline-flex', flexDirection: 'column', gap: '0' },
+                  },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      'aria-label': `${name} ${t.moveUp}`,
+                      title: t.moveUp,
+                      disabled: position === 0,
+                      onClick: () => move(name, -1),
+                      style: {
+                        appearance: 'none', font: 'inherit', fontSize: '10px', lineHeight: '12px',
+                        cursor: 'pointer', border: 'none', background: 'none',
+                        color: 'var(--dsw-alias-label-secondary, inherit)', padding: '0 2px',
+                        opacity: position === 0 ? 0.3 : 1,
+                      },
+                    },
+                    '▲',
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      'aria-label': `${name} ${t.moveDown}`,
+                      title: t.moveDown,
+                      disabled: position === order.length - 1,
+                      onClick: () => move(name, 1),
+                      style: {
+                        appearance: 'none', font: 'inherit', fontSize: '10px', lineHeight: '12px',
+                        cursor: 'pointer', border: 'none', background: 'none',
+                        color: 'var(--dsw-alias-label-secondary, inherit)', padding: '0 2px',
+                        opacity: position === order.length - 1 ? 0.3 : 1,
+                      },
+                    },
+                    '▼',
+                  ),
+                ),
+                h('span', {
+                  title: light,
+                  'aria-label': `${name}: ${light}`,
+                  role: 'img',
+                  style: {
+                    width: '10px', height: '10px', borderRadius: '50%', flex: 'none',
+                    background: color, display: 'inline-block',
                   },
                 }),
                 h('span', null, name),
-                // grok-cli serves the social role alone: it never joins
-                // web-search failover, and an unmarked tickbox in a row of
-                // search engines would promise that it does.
+                // grok-cli takes the failover tick too: switching it off is
+                // how the user keeps X requests on the documented degrade
+                // path. It gets no parallel tick (it searches X, not the web)
+                // and the aside says why it is different.
                 name === 'grok-cli'
-                  ? h(
-                      'span',
-                      {
-                        style: {
-                          color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
-                          fontSize: '12px',
+                  ? null
+                  : box(inParallel, t.parallel, () => {
+                      draftState[1](
+                        Object.assign({}, draft, {
+                          parallel: Object.assign({}, draft.parallel, { [name]: !inParallel }),
+                        }),
+                      );
+                      noteState[1]('');
+                    }, `${name}-parallel`),
+                h(
+                  'label',
+                  { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' } },
+                  box(checked, 'failover', (event) => {
+                    draftState[1](toggleEngine(draft, name, event.target.checked));
+                    noteState[1]('');
+                  }, `${name}-failover`),
+                  name === 'grok-cli'
+                    ? h(
+                        'span',
+                        {
+                          style: {
+                            color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                            fontSize: '12px',
+                          },
                         },
-                      },
-                      t.socialOnly,
-                    )
-                  : null,
+                        t.socialOnly,
+                      )
+                    : h(
+                        'span',
+                        { style: { fontSize: '12px', color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))' } },
+                        'failover',
+                      ),
+                ),
               );
             });
 
@@ -862,6 +1056,142 @@ window.__ModuleLoader__.load({
                 ),
                 'status',
                 t.autoTitle,
+              ),
+              fieldRow(
+                h(
+                  'span',
+                  null,
+                  t.chainSection,
+                  h(
+                    'span',
+                    {
+                      style: {
+                        color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                        fontWeight: 400,
+                        marginLeft: '8px',
+                      },
+                    },
+                    t.chainHint,
+                  ),
+                ),
+                h(
+                  'div',
+                  { style: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' } },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      disabled: probeValue === t.probing,
+                      onClick: () => {
+                        if (!window.confirm(t.probeConfirm)) {
+                          return;
+                        }
+                        setProbe(t.probing);
+                        const engines = order.filter((name) => draft.enabled?.[name] !== false);
+                        fetch('/modsearch/probe', {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify({ engines }),
+                        })
+                          .then((r) =>
+                            r.json().then((body) => {
+                              if (!r.ok) {
+                                throw new Error(body.error || '');
+                              }
+                              return body;
+                            }),
+                          )
+                          .then((body) => {
+                            setProbe('');
+                            summaryState[1](
+                              Object.assign({}, summary, { health: body.health ?? {} }),
+                            );
+                          })
+                          .catch((error) => {
+                            setProbe('');
+                            noteState[1](noteFrom(error, t.saveFailed));
+                          });
+                      },
+                      style: {
+                        appearance: 'none',
+                        font: 'inherit',
+                        fontSize: '13px',
+                        lineHeight: 1.5,
+                        cursor: 'pointer',
+                        border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
+                        borderRadius: '8px',
+                        padding: '5px 14px',
+                        background: 'none',
+                        color: 'var(--dsw-alias-label-secondary, inherit)',
+                      },
+                    },
+                    (probeValue || t.probe),
+                  ),
+                ),
+                'probe',
+                t.probe,
+              ),
+              fieldRow(
+                h(
+                  'span',
+                  null,
+                  t.aiSection,
+                  h(
+                    'span',
+                    {
+                      style: {
+                        color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                        fontWeight: 400,
+                        marginLeft: '8px',
+                      },
+                    },
+                    t.aiHint,
+                  ),
+                ),
+                h(
+                  'div',
+                  {
+                    role: 'group',
+                    'aria-label': t.aiSection,
+                    style: { display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '2px' },
+                  },
+                  h(
+                    'label',
+                    { style: { display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' } },
+                    h('input', {
+                      type: 'checkbox',
+                      checked: draft.ai?.allowEngines === true,
+                      onChange: (event) => {
+                        draftState[1](
+                          Object.assign({}, draft, {
+                            ai: Object.assign({}, draft.ai, { allowEngines: event.target.checked }),
+                          }),
+                        );
+                        noteState[1]('');
+                      },
+                    }),
+                    h('span', null, t.allowEngines),
+                  ),
+                  h(
+                    'label',
+                    { style: { display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' } },
+                    h('input', {
+                      type: 'checkbox',
+                      checked: draft.ai?.allowParallel === true,
+                      onChange: (event) => {
+                        draftState[1](
+                          Object.assign({}, draft, {
+                            ai: Object.assign({}, draft.ai, { allowParallel: event.target.checked }),
+                          }),
+                        );
+                        noteState[1]('');
+                      },
+                    }),
+                    h('span', null, t.allowParallel),
+                  ),
+                ),
+                'ai-permissions',
+                t.aiSection,
               ),
               h(
                 'div',

@@ -11,13 +11,23 @@ import {
 import { parseSources, planRun, SOURCE_ROLE, type SourcePlan } from './router.ts';
 import { runCommand } from './subprocess.ts';
 import { isApiKeyFailure, splitApiKeys } from './util/apiKeys.ts';
+import { recordHealth } from './util/health.ts';
 import { redactSecrets } from './util/redact.ts';
 
 export interface RunSearchOptions {
   query?: string;
   url?: string;
-  /** Engine override for this run, e.g. `tavily`. */
+  /** Engine override for this run, e.g. `tavily`; a comma list is a chain. */
   engine?: string;
+  /**
+   * Run the query across several engines at once instead of one chain. The
+   * engines are the explicit --engine list when one was given, else the
+   * engines flagged `parallel: true` in config. Each engine answers
+   * independently under its own timeout; the hits fuse with reciprocal rank
+   * fusion, deduplicated by URL. Search mode only, and every engine in the
+   * set is really called, so everything bills.
+   */
+  parallel?: boolean;
   /** Source list, e.g. `web,x`. Undefined decides from the query. */
   sources?: string;
   model?: string;
@@ -218,6 +228,23 @@ export async function runSearch(options: RunSearchOptions): Promise<RunSearchRes
         };
   const context = { mode, query, url, timeoutMs, deadline, config, env, options };
 
+  // Parallel mode is a search-only shape: one query fanned out across several
+  // engines at once, fused into a single entry. Everything else keeps the
+  // serial failover path below, untouched.
+  if (options.parallel === true && mode === 'search') {
+    const result = await runParallelSearch(context);
+    return {
+      mode,
+      query: query ?? null,
+      url: url ?? null,
+      results: [result],
+      meta: {
+        generatedAt: new Date().toISOString(),
+        durationSeconds: (Date.now() - startedAt) / 1000,
+      },
+    };
+  }
+
   // Run every source's plan concurrently and reassemble in request order, so a
   // web,x run costs about the time of its slowest source, not their sum.
   // Promise.all preserves index order regardless of which settled first.
@@ -246,6 +273,190 @@ export async function runSearch(options: RunSearchOptions): Promise<RunSearchRes
       durationSeconds: (Date.now() - startedAt) / 1000,
     },
   };
+}
+
+/** Reciprocal rank fusion constant; 60 is the field-standard dampener. */
+const RRF_K = 60;
+
+interface ParallelEngineOutput {
+  engine: SearchEngine;
+  ok: boolean;
+  entry?: EngineOutput;
+  error?: string;
+  durationSeconds: number;
+}
+
+/**
+ * One query, many engines at once. The engine set is an explicit --engine
+ * list when one was given, else every search engine flagged `parallel: true`
+ * in config; a run that resolves to no engine names the gap instead of
+ * guessing. Each engine answers on its own under the full per-engine timeout,
+ * failures do not touch their siblings, and the successes are fused with
+ * reciprocal rank fusion, deduplicated by URL, each hit carrying the engines
+ * that returned it.
+ */
+async function runParallelSearch(context: {
+  mode: RunMode;
+  query?: string;
+  url?: string;
+  timeoutMs: number;
+  deadline?: RunDeadline;
+  config: ModsearchConfig;
+  env: NodeJS.ProcessEnv;
+  options: RunSearchOptions;
+}): Promise<SourceResult> {
+  const { mode, query, url, timeoutMs, deadline, config, env, options } = context;
+  const startedAt = Date.now();
+
+  // The plan gives the availability-filtered search chain; the parallel set
+  // is the explicit list when given, else the whitelist slice of that chain.
+  const plans = planRun({ mode, query, config, requestedEngine: options.engine, env });
+  const chain = (plans.find((plan) => plan.source === 'web')?.engine
+    ? [plans.find((plan) => plan.source === 'web')!.engine!, ...plans[0].fallbacks]
+    : []
+  ).filter(Boolean) as SearchEngine[];
+
+  const explicitList = options.engine?.trim();
+  const set = explicitList
+    ? chain
+    : chain.filter((engine) => engineSettings(engine.name, config, env).parallel === true);
+
+  const attempts: EngineAttempt[] = [];
+  if (set.length === 0) {
+    const hint = explicitList
+      ? `No engine from the list could serve the parallel run.`
+      : `No engine is flagged for parallel search. Tick engines in the settings card, or run: modsearch config set <engine>.parallel true`;
+    throw new SourceRunError(`Parallel search has no engines to run. ${hint}`, []);
+  }
+
+  // One attempt per engine: the first configured key, its own timeout budget.
+  // Key rotation stays a serial-path concern; a parallel run reports the
+  // failure per engine rather than retrying inside it.
+  const outcomes = await Promise.all(
+    set.map(async (engine): Promise<ParallelEngineOutput> => {
+      const settings = engineSettings(engine.name, config, env);
+      const model = options.model || settings.model || engine.defaultModel;
+      const apiKeys = splitApiKeys(settings.apiKey);
+      const apiKey = apiKeys[0];
+      const engineStartedAt = Date.now();
+      try {
+        const output = await withinTime(
+          engine.name,
+          engine.execute!({
+            mode,
+            query,
+            url,
+            model,
+            maxResults: options.maxResults,
+            extraPrompt: options.prompt,
+            workdir: options.workdir,
+            timeoutMs,
+            settings: { ...settings, apiKey },
+            apiKeySecrets: apiKeys,
+            allowPrivateNetwork:
+              options.allowPrivateNetwork === true || config.allowPrivateNetwork === true,
+          }),
+          deadline ? Math.max(1_000, deadline.at - Date.now()) : timeoutMs,
+        );
+        const durationSeconds = (Date.now() - engineStartedAt) / 1000;
+        recordHealth(engine.name, { ok: true, durationSeconds });
+        attempts.push({
+          engine: engine.name,
+          ok: true,
+          durationSeconds,
+          ...engineSpend(output.meta.usage),
+        });
+        return { engine, ok: true, entry: output, durationSeconds };
+      } catch (error) {
+        const message = redactSecrets(
+          error instanceof Error ? error.message : String(error),
+          apiKeys,
+        );
+        const durationSeconds = (Date.now() - engineStartedAt) / 1000;
+        recordHealth(engine.name, { ok: false, error: message, durationSeconds });
+        attempts.push({ engine: engine.name, ok: false, error: message, durationSeconds });
+        return { engine, ok: false, error: message, durationSeconds };
+      }
+    }),
+  );
+
+  const succeeded = outcomes.filter((outcome) => outcome.ok && outcome.entry);
+  if (succeeded.length === 0) {
+    throw new SourceRunError(
+      `Every engine in the parallel run failed.\n${outcomes
+        .map((outcome) => `  - ${outcome.engine.name}: ${outcome.error ?? 'failed'}`)
+        .join('\n')}`,
+      attempts,
+    );
+  }
+
+  const maxResults = options.maxResults ?? 10;
+  const fused = fuseParallelOutputs(
+    succeeded.map((outcome) => ({ engine: outcome.engine.name, entry: outcome.entry! })),
+    maxResults,
+  );
+
+  const warnings = outcomes.map((outcome) =>
+    outcome.ok
+      ? `The ${outcome.engine.name} engine answered in ${outcome.durationSeconds.toFixed(1)}s.`
+      : `The ${outcome.engine.name} engine failed: ${outcome.error}`,
+  );
+
+  return {
+    source: 'web',
+    requestedSource: 'web',
+    engine: `parallel:${succeeded.map((outcome) => outcome.engine.name).join('+')}`,
+    model: options.model,
+    status: 'ok',
+    warnings,
+    attempts,
+    durationSeconds: (Date.now() - startedAt) / 1000,
+    summary: `Parallel query across ${outcomes.length} engine(s): ${succeeded.length} answered, fused into ${fused.length} unique result(s) (reciprocal rank fusion, deduplicated by URL). Each item lists the engines that returned it.`,
+    items: fused,
+    uncertainty: succeeded.length < outcomes.length
+      ? [`${outcomes.length - succeeded.length} engine(s) in the parallel set failed; the fusion covers only the engines that answered.`]
+      : [],
+  };
+}
+
+/**
+ * Reciprocal rank fusion over per-engine result lists. An URL seen in several
+ * engines rises (its scores add) and carries every engine that returned it;
+ * an URL only one engine found keeps that engine's name. The first engine to
+ * return a hit donates its title/snippet/date.
+ */
+function fuseParallelOutputs(
+  outputs: Array<{ engine: string; entry: EngineOutput }>,
+  limit: number,
+): Array<Record<string, unknown>> {
+  const byUrl = new Map<
+    string,
+    { item: Record<string, unknown>; engines: Set<string>; score: number }
+  >();
+  for (const { engine, entry } of outputs) {
+    const items = Array.isArray((entry.result as { items?: unknown }).items)
+      ? ((entry.result as { items: Array<Record<string, unknown>> }).items ?? [])
+      : [];
+    items.forEach((item, index) => {
+      const link = typeof item.url === 'string' ? item.url : '';
+      const key = link || `no-url:${engine}:${index}`;
+      const seen = byUrl.get(key);
+      if (seen) {
+        seen.engines.add(engine);
+        seen.score += 1 / (RRF_K + index + 1);
+      } else {
+        byUrl.set(key, {
+          item: { ...item, engines: [engine] },
+          engines: new Set([engine]),
+          score: 1 / (RRF_K + index + 1),
+        });
+      }
+    });
+  }
+  return [...byUrl.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((seen) => ({ ...seen.item, engines: [...seen.engines] }));
 }
 
 async function runOneSource(
@@ -361,6 +572,10 @@ async function runOneSource(
         );
         successfulStartedAt = startedAt;
         successfulKeyIndex = keyRun.keyIndex;
+        recordHealth(engine.name, {
+          ok: true,
+          durationSeconds: (Date.now() - startedAt) / 1000,
+        });
         break;
       } catch (error) {
         // Engines redact their own errors, but attempts and warnings travel into
@@ -369,6 +584,11 @@ async function runOneSource(
           error instanceof Error ? error.message : String(error),
           apiKeys,
         );
+        recordHealth(engine.name, {
+          ok: false,
+          error: message,
+          durationSeconds: (Date.now() - startedAt) / 1000,
+        });
         const keyLabel = apiKeys.length > 1 ? ` (API key ${Number(keyRun.keyIndex) + 1})` : '';
         failures.push(`${engine.name}${keyLabel}: ${message}`);
         attempts.push({

@@ -370,6 +370,11 @@ describe('a save carries only what the save is about', () => {
         'grok-cli': true,
         local: true,
       },
+      ai: { allowEngines: false, allowParallel: false },
+      order: CHAIN_ENGINES_ORDER,
+      parallel: Object.fromEntries(
+        CHAIN_ENGINES_ORDER.map((name) => [name, false]),
+      ),
     });
   });
 
@@ -506,6 +511,7 @@ interface ChainRow {
   label: string;
   checked: unknown;
   title: unknown;
+  text: string;
 }
 
 interface Rendered {
@@ -567,12 +573,45 @@ function render(
     draft,
     nodes: built,
     chain: built
-      .filter((node) => node.type === 'label' && boxOf(node) !== undefined)
-      .map((node) => ({
-        label: textOf(node.kids).replace(/\s+/g, ' ').trim(),
-        checked: boxOf(node)?.props.checked,
-        title: node.props.title,
-      })),
+      .filter(
+        (node) =>
+          node.type === 'div' &&
+          node.kids.some(
+            (kid) =>
+              isNode(kid) && kid.props.role === 'img' && typeof kid.props['aria-label'] === 'string',
+          ),
+      )
+      .map((node) => {
+        const light = node.kids.find(
+          (kid) =>
+            isNode(kid) && kid.props.role === 'img' && typeof kid.props['aria-label'] === 'string',
+        ) as Node;
+        const boxes: Node[] = [];
+        const walk = (value: unknown) => {
+          if (isNode(value)) {
+            if (value.props.type === 'checkbox') {
+              boxes.push(value);
+            }
+            value.kids.forEach(walk);
+          }
+        };
+        walk(node);
+        const failover = boxes.find(
+          (box) =>
+            typeof box.props['aria-label'] === 'string' &&
+            box.props['aria-label'].endsWith('failover'),
+        );
+        const label =
+          typeof failover?.props['aria-label'] === 'string'
+            ? failover.props['aria-label'].replace(/ failover$/, '')
+            : (textOf(node.kids).match(/[a-z-]+/)?.[0] ?? '');
+        return {
+          label,
+          checked: failover?.props.checked,
+          title: light.props.title,
+          text: textOf(node.kids),
+        };
+      }),
     options: built
       .filter((node) => node.type === 'option')
       .map((node) => ({
@@ -584,6 +623,18 @@ function render(
       .filter((kid): kid is string => typeof kid === 'string'),
   };
 }
+
+const CHAIN_ENGINES_ORDER = [
+  'antigravity-cli',
+  'tavily',
+  'exa',
+  'firecrawl',
+  'keenable',
+  'minimax',
+  'minimax-websearch',
+  'glm',
+  'grok-cli',
+];
 
 const READINESS = [
   { engine: 'antigravity-cli', ready: false, reason: 'binary "agy" not found', keySource: null },
@@ -615,8 +666,19 @@ describe('the automatic engine chain lists what this machine can actually search
     // by existing. A title attribute would put untranslated status text back on
     // a card that just took it off.
     const view = render({ ...SUMMARY, readiness: READINESS });
-    expect(view.chain.map((row) => row.title)).toEqual([undefined, undefined]);
-    expect(view.nodes.some((node) => node.props.title !== undefined)).toBe(false);
+    expect(view.chain.map((row) => row.title)).toEqual([
+    expect.stringContaining('never called'),
+    expect.stringContaining('never called'),
+  ]);
+    expect(view.chain.map((row) => row.title).join(' ')).not.toContain('API key present');
+    // The only titles on the card are the traffic lights' health verdicts; a
+    // doctor reason never travels into any tooltip.
+    expect(
+      view.nodes.some(
+        (node) =>
+          typeof node.props.title === 'string' && node.props.title.includes('API key present'),
+      ),
+    ).toBe(false);
   });
 
   it('leaves the page fetcher out of a row of search engines', () => {
@@ -637,11 +699,16 @@ describe('the automatic engine chain lists what this machine can actually search
         entry.engine === 'grok-cli' ? { ...entry, ready: true } : entry,
       ),
     });
-    expect(view.chain.map((row) => row.label)).toContain('grok-cli X search only');
+    expect(view.chain.map((row) => row.label)).toContain('grok-cli');
+    expect(view.chain.find((row) => row.label === 'grok-cli')?.text).toContain('X search only');
+    // The failover checkbox the row does carry names the engine plainly; the
+    // X-only aside rides in the row's visible text, which a screen reader on
+    // any control in the row can reach.
     const box = view.nodes.find(
-      (node) => node.props.type === 'checkbox' && typeof node.props['aria-label'] === 'string',
+      (node) =>
+        node.props.type === 'checkbox' && node.props['aria-label'] === 'grok-cli failover',
     );
-    expect(box?.props['aria-label'] ?? 'grok-cli X search only').toContain('X search only');
+    expect(box?.props['aria-label']).toBe('grok-cli failover');
   });
 
   it('keeps a ready engine on screen after it was switched off', () => {
@@ -690,8 +757,9 @@ describe('the automatic engine chain lists what this machine can actually search
       'minimax',
       'minimax-websearch',
       'glm',
-      'grok-cli X search only',
+      'grok-cli',
     ]);
+    expect(view.chain.at(-1)?.text).toContain('X search only');
     expect(view.texts.some((text) => /status is unavailable/i.test(text))).toBe(true);
   });
 

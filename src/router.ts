@@ -124,19 +124,32 @@ export function planRole(
 
   const explicit = requestedEngine?.trim();
   if (explicit) {
-    // Strict: force exactly this engine, no fallbacks. A silent switch to
-    // another engine here is what burned other providers' quotas.
-    const engine = findEngine(explicit);
-    if (!engine) {
+    // Strict: force exactly these engines, no fallbacks beyond them. A comma
+    // list (minimax,exa) is a chain: try them in the order given, and if every
+    // one fails the run fails — a silent switch to an unlisted engine is what
+    // burned other providers' quotas.
+    const names = explicit
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (names.length === 0) {
       notes.push(
-        `Unknown engine "${explicit}" (--engine). Drop -e to let modsearch pick one that works, or name a known engine: ${listEngines().join(', ')}.`,
+        `Empty engine list (--engine). Drop -e to let modsearch pick engines that work, or name known engines: ${listEngines().join(', ')}.`,
       );
-    } else if (!engine.roles.includes(role)) {
-      notes.push(
-        `The ${engine.name} engine cannot ${role} (--engine forces it with no fallback). Drop -e to let modsearch pick an engine that can. ${engine.name} handles: ${engine.roles.join(', ')}.`,
-      );
-    } else {
-      add(engine);
+    }
+    for (const name of names) {
+      const engine = findEngine(name);
+      if (!engine) {
+        notes.push(
+          `Unknown engine "${name}" (--engine). Drop -e to let modsearch pick one that works, or name a known engine: ${listEngines().join(', ')}.`,
+        );
+      } else if (!engine.roles.includes(role)) {
+        notes.push(
+          `The ${engine.name} engine cannot ${role} (--engine forces it with no fallback). Drop -e to let modsearch pick an engine that can. ${engine.name} handles: ${engine.roles.join(', ')}.`,
+        );
+      } else {
+        add(engine);
+      }
     }
     return { chain, notes };
   }
@@ -168,6 +181,18 @@ export function planRole(
     if (enabled(engine) && usable(engine)) {
       add(engine);
     }
+  }
+
+  // The user's drag ordering outranks the built-in order: engines carrying a
+  // priority sort first by that number (stable), engines without one keep the
+  // built-in order after them. This is the priority chain, not a cooldown
+  // demotion — it applies every run.
+  if (role === 'search' && chain.some((engine) => settingsFor(engine.name).priority !== undefined)) {
+    const orderOf = (engine: SearchEngine): number => {
+      const priority = settingsFor(engine.name).priority;
+      return priority === undefined ? Number.POSITIVE_INFINITY : priority;
+    };
+    chain.sort((a, b) => orderOf(a) - orderOf(b));
   }
 
   if (role === 'fetch') {

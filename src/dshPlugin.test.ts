@@ -1019,7 +1019,7 @@ describe('dsh settings card route', () => {
       plugin.apply(stage.ctx as never, {});
       expect(stage.injected).toContainEqual(['settings']);
       expect(stage.routes['modsearch-config']).toBeDefined();
-      expect([...stage.tools.keys()].sort()).toEqual(['read_page', 'x_search']);
+      expect([...stage.tools.keys()].sort()).toEqual(['read_page', 'web_search_pro', 'x_search']);
       expect(stage.providers).toHaveLength(1);
       expect(errors).not.toHaveBeenCalled();
     } finally {
@@ -1039,7 +1039,7 @@ describe('dsh settings card route', () => {
     expect(stage.injected).toContainEqual(['settings']);
     expect(stage.namespaces).toEqual([]);
     expect(stage.routes['modsearch-config']).toBeDefined();
-    expect([...stage.tools.keys()].sort()).toEqual(['read_page', 'x_search']);
+    expect([...stage.tools.keys()].sort()).toEqual(['read_page', 'web_search_pro', 'x_search']);
     expect(stage.providers).toHaveLength(1);
   });
 
@@ -1084,6 +1084,7 @@ describe('dsh plugin config switches', () => {
   it('registers nothing when every surface is switched off', async () => {
     const { tools, providers } = await load({
       searchProvider: false,
+      webSearchTool: false,
       xSearch: false,
       readPage: false,
     });
@@ -1108,7 +1109,7 @@ describe('dsh plugin config switches', () => {
       } as never,
       {},
     );
-    expect([...tools.keys()].sort()).toEqual(['read_page', 'x_search']);
+    expect([...tools.keys()].sort()).toEqual(['read_page', 'web_search_pro', 'x_search']);
   });
 
   it('keeps search, x_search and read_page on a host with no scoped injects at all', async () => {
@@ -1116,7 +1117,7 @@ describe('dsh plugin config switches', () => {
     // have no ctx.inject to hang them on. The settings card is the only thing
     // that may go missing there.
     const { tools, providers } = await load();
-    expect([...tools.keys()].sort()).toEqual(['read_page', 'x_search']);
+    expect([...tools.keys()].sort()).toEqual(['read_page', 'web_search_pro', 'x_search']);
     expect(providers).toHaveLength(1);
   });
 });

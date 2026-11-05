@@ -57,7 +57,11 @@ program
   )
   .option(
     '-e, --engine <name>',
-    'Engine for this run, overriding config (antigravity-cli, tavily, exa, firecrawl, keenable, grok-cli, local)',
+    'Engine for this run, overriding config (antigravity-cli, tavily, exa, firecrawl, keenable, grok-cli, local); a comma list (minimax,exa) is a strict chain',
+  )
+  .option(
+    '--parallel',
+    'Run the query across several engines at once (the --engine list when given, else the engines flagged parallel in config) and fuse the results',
   )
   .option('-m, --model <name>', 'Engine model, where the engine has one')
   .option('--prompt <text>', 'Extra constraints for this run')
@@ -100,6 +104,7 @@ program
         query: options.query,
         url: options.url,
         engine: options.engine,
+        parallel: options.parallel === true,
         sources: options.source,
         model: options.model,
         prompt: options.prompt,

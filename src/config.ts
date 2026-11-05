@@ -28,6 +28,15 @@ export interface EngineSettings {
   /** Participate in automatic routing. Undefined means enabled. */
   enabled?: boolean;
   /**
+   * Position in the automatic search chain, smaller first. Engines without a
+   * priority follow in the built-in order after every engine that has one.
+   * The settings card writes these numbers from its drag ordering; the CLI
+   * accepts them as plain integers.
+   */
+  priority?: number;
+  /** Join parallel (multi-engine) searches. Undefined or false means out. */
+  parallel?: boolean;
+  /**
    * Allow Firecrawl to fetch public URLs without an API key. On by default
    * (undefined means on); set false to keep page fetch off Firecrawl's cloud.
    */
@@ -42,10 +51,20 @@ export interface EngineSettings {
   baseURL?: string;
 }
 
+/** What the harness AI may choose on its own during a session. */
+export interface AiSettings {
+  /** The search tool may carry an explicit engine list for this run. */
+  allowEngines?: boolean;
+  /** The search tool may run the parallel whitelist as one multi-engine query. */
+  allowParallel?: boolean;
+}
+
 export interface ModsearchConfig {
   /** Engine for searching. Empty means: use the best one available here. */
   engine?: string;
   engines?: Record<string, EngineSettings>;
+  /** AI permission switches; absent means both off (priority routing only). */
+  ai?: AiSettings;
   /**
    * Quota cooldown switch: 'on' (default) or 'off'. On, a quota-spent engine is
    * remembered and moved to the back of the fallback chain until it recovers.
@@ -90,6 +109,8 @@ const SETTABLE_ENGINE_FIELDS: Array<keyof EngineSettings> = [
   'model',
   'bin',
   'enabled',
+  'priority',
+  'parallel',
   'baseURL',
   'keylessFetch',
 ];
@@ -224,6 +245,8 @@ export function migrateLegacyConfig(raw: ModsearchConfig & LegacyConfig): Modsea
         allowPrivateNetwork: legacyFlag,
         keylessFetch: rawKeylessFetch,
         enabled: rawEnabled,
+        parallel: rawParallel,
+        priority: rawPriority,
         ...rest
       } = rawSettings;
       if (legacyFlag !== undefined) {
@@ -231,11 +254,20 @@ export function migrateLegacyConfig(raw: ModsearchConfig & LegacyConfig): Modsea
       }
       const keylessFetch = coerceBoolean(rawKeylessFetch);
       const enabled = coerceBoolean(rawEnabled);
+      const parallel = coerceBoolean(rawParallel);
+      const priority =
+        typeof rawPriority === 'number'
+          ? rawPriority
+          : typeof rawPriority === 'string' && Number.isFinite(Number.parseInt(rawPriority, 10))
+            ? Number.parseInt(rawPriority, 10)
+            : undefined;
       engines[canonical] = {
         ...engines[canonical],
         ...(rest as EngineSettings),
         ...(keylessFetch === undefined ? {} : { keylessFetch }),
         ...(enabled === undefined ? {} : { enabled }),
+        ...(parallel === undefined ? {} : { parallel }),
+        ...(priority === undefined ? {} : { priority }),
       };
     }
   };
@@ -321,6 +353,19 @@ export function allowsPrivateNetwork(config: ModsearchConfig): boolean {
   return config.allowPrivateNetwork === true;
 }
 
+/**
+ * The AI permission switches. Both default to off: the harness AI routes by
+ * the configured priority chain and nothing else until the settings card (or
+ * `config set ai.allowEngines` / `ai.allowParallel`) says otherwise.
+ */
+export function aiSettings(config: ModsearchConfig): Required<AiSettings> {
+  const ai = isPlainObject(config.ai) ? config.ai : {};
+  return {
+    allowEngines: ai.allowEngines === true,
+    allowParallel: ai.allowParallel === true,
+  };
+}
+
 /** Settings for one engine, with env vars overriding the file. */
 export function engineSettings(
   engineName: string,
@@ -386,6 +431,27 @@ export function setConfigValue(
       throw new Error(`Invalid allowPrivateNetwork value: ${value}. Use true or false.`);
     }
     config.allowPrivateNetwork = parsed;
+  } else if (parts.length === 2 && parts[0] === 'ai') {
+    // AI permission switches: ai.allowEngines / ai.allowParallel, both boolean.
+    // Absent means off, so only an explicit write changes anything.
+    const field = parts[1];
+    if (field !== 'allowEngines' && field !== 'allowParallel') {
+      throw new Error(`Unknown ai setting: ${field}. Use ai.allowEngines or ai.allowParallel.`);
+    }
+    const parsed = coerceBoolean(value);
+    if (parsed === undefined) {
+      throw new Error(`Invalid ${field} value: ${value}. Use true or false.`);
+    }
+    config.ai = { ...(config.ai ?? {}) };
+    if (parsed) {
+      config.ai[field] = true;
+    } else {
+      // false is the default; storing it adds nothing the reader needs.
+      delete config.ai[field];
+    }
+    if (Object.keys(config.ai).length === 0) {
+      delete config.ai;
+    }
   } else {
     const [rawEngineName, field] =
       parts[0] === 'engines' ? [parts[1], parts[2]] : [parts[0], parts[1]];
@@ -420,15 +486,20 @@ export function setConfigValue(
         `The "engines.${engineName}" entry of the config file is not an object. Fix or remove it.`,
       );
     }
-    if (field === 'keylessFetch' || field === 'enabled') {
+    if (field === 'keylessFetch' || field === 'enabled' || field === 'parallel') {
       const parsed = coerceBoolean(value);
       if (parsed === undefined) {
         throw new Error(`Invalid ${field} value: ${value}. Use true or false.`);
       }
-      if (field === 'enabled' && parsed) {
+      // `enabled` defaults to true, so its true is the default and not stored;
+      // `parallel` defaults to false, so its false is not stored;
+      // `keylessFetch` stores both spellings: its opt-out (false) is the flag
+      // that matters, and an explicit true is what removes an earlier one.
+      const removeOnWrite = (field === 'enabled' && parsed) || (field === 'parallel' && !parsed);
+      if (removeOnWrite) {
         const settings = config.engines?.[engineName];
         if (settings) {
-          delete settings.enabled;
+          delete settings[field];
           if (Object.keys(settings).length === 0) {
             delete config.engines?.[engineName];
           }
@@ -439,6 +510,19 @@ export function setConfigValue(
       config.engines ??= {};
       config.engines[engineName] ??= {};
       config.engines[engineName][field] = parsed;
+      writeConfigFile(config, configPath);
+      return;
+    }
+    if (field === 'priority') {
+      const parsed = Number.parseInt(value.trim(), 10);
+      if (!Number.isFinite(parsed) || String(parsed) !== value.trim()) {
+        throw new Error(
+          `Invalid priority: ${value}. Use a whole number; smaller sorts earlier in the automatic chain.`,
+        );
+      }
+      config.engines ??= {};
+      config.engines[engineName] ??= {};
+      config.engines[engineName].priority = parsed;
       writeConfigFile(config, configPath);
       return;
     }
@@ -632,6 +716,11 @@ export function renderEffectiveConfig(
     config.allowPrivateNetwork === undefined
       ? 'false (default)'
       : tag(String(config.allowPrivateNetwork), 'file');
+  const ai = aiSettings(config);
+  out.ai = {
+    allowEngines: ai.allowEngines ? tag('true', 'file') : 'false (default)',
+    allowParallel: ai.allowParallel ? tag('true', 'file') : 'false (default)',
+  };
 
   const engines: Record<string, Record<string, string>> = {};
   const notes: string[] = [];

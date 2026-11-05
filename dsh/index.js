@@ -63,6 +63,15 @@ export function apply(ctx, config = {}) {
   if (config.searchProvider !== false) {
     registerSearchProvider(ctx, config);
   }
+  // The fork's three-mode search tool. It sits BESIDE the seam's web_search
+  // (which keeps the default priority chain and its citation cards) under the
+  // name web_search_pro: a host preset instantiates the seam tool from its own
+  // composition, so a same-named registration here would collide or silently
+  // lose, and a mode-carrying tool needs to exist regardless of which preset
+  // the profile booted.
+  if (config.webSearchTool !== false) {
+    registerWebSearchTool(ctx);
+  }
   // Registered as raw JSON-Schema tool definitions (no dsh package imports:
   // the developer-preview registry accepts these and out-of-tree resolution
   // of @deepseek-ai/dsh-tools is not yet reliable), so this plugin owns its
@@ -299,6 +308,136 @@ function registerReadPageTool(ctx) {
         ...(Array.isArray(entry.links) ? { links: entry.links } : {}),
         uncertainty: Array.isArray(entry.uncertainty) ? entry.uncertainty : [],
         warnings: Array.isArray(entry.warnings) ? entry.warnings : [],
+      };
+    },
+  });
+}
+
+/**
+ * The AI permission switches from ~/.modsearch/config.json, plain-JS read for
+ * the tool path. Both default to false: without an explicit write the harness
+ * AI routes by the configured priority chain and nothing else.
+ */
+function aiSettingsOf(config) {
+  const ai = config && typeof config === 'object' && config.ai && typeof config.ai === 'object'
+    ? config.ai
+    : {};
+  return { allowEngines: ai.allowEngines === true, allowParallel: ai.allowParallel === true };
+}
+
+/**
+ * The fork's three-mode search tool, web_search_pro. Three shapes behind two
+ * permission switches the settings card owns:
+ *
+ * - default (no mode, no engines): the priority chain, one engine at a time,
+ *   failing over down the user's drag order. Always available.
+ * - `engines: [...]`: a strict chain of the named engines. Only when
+ *   ai.allowEngines is on; otherwise the parameter is ignored and a warning
+ *   says so, because a silent override is indistinguishable from obedience.
+ * - `mode: "parallel"`: the parallel whitelist in one fused query. Only when
+ *   ai.allowParallel is on; otherwise ignored with a warning. Every engine in
+ *   the set really runs, so this is the switch that spends money.
+ *
+ * The schema always declares both parameters: a dynamic schema would need the
+ * card's save to reach an already-running session, and the execute-time
+ * permission check plus an honest warning is the same contract without the
+ * machinery.
+ */
+function registerWebSearchTool(ctx) {
+  ctx.tools.register({
+    name: 'web_search_pro',
+    description:
+      'Multi-mode web search through the modsearch engine chain. Default: the priority chain the user ordered, one engine at a time with automatic failover. "engines" pins named engines for this run (minimax, glm, exa, tavily, firecrawl, keenable, minimax-websearch); "mode": "parallel" runs several whitelisted engines at once and fuses the results with per-item engine attribution — every engine in a parallel run really bills, so reserve it for deep research. Prefer the plain web_search tool for ordinary lookups; reach for this one when the task needs a specific engine or cross-checked multi-engine research. Returns structured evidence with a summary, per-result items (title, URL, snippet, source engines), an uncertainty list, and warnings naming which engines answered or fell over.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'What to look for, in plain words',
+        },
+        max_results: {
+          type: 'number',
+          description: 'Maximum number of fused result items (default 8)',
+        },
+        engines: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Engine names to force for this run, tried in order (e.g. ["minimax","glm"]). Only applied when the host allows AI engine selection; otherwise ignored with a warning.',
+        },
+        mode: {
+          type: 'string',
+          enum: ['priority', 'parallel'],
+          description:
+            '"parallel" fans the query out across the whitelisted engines at once and fuses the hits (deep research; every engine bills). Only applied when the host allows AI parallel search; otherwise ignored with a warning. Default "priority" runs the ordered chain.',
+        },
+      },
+      required: ['query'],
+    },
+    output: {
+      schema: SEARCH_OUTPUT_SCHEMA,
+      render: (_args, value) => [{ type: 'text', text: renderSearchEvidence(value) }],
+      presentationMeta: (_args, value) => ({ sources: toSources(value.items) }),
+    },
+    timeoutMs: OWN_TOOL_BACKSTOP_MS,
+    isConcurrencySafe: () => true,
+    presentCall: (args) => ({
+      card: 'generic',
+      title: 'web_search',
+      kind: 'search',
+      rawInput: args,
+    }),
+    presentResult: (_args, result) => {
+      if (result.isError || !result.meta || !Array.isArray(result.meta.sources)) {
+        return undefined;
+      }
+      return { card: 'web', kind: 'search', sources: result.meta.sources, truncated: false };
+    },
+    async execute(args, exec) {
+      if (typeof args?.query !== 'string' || args.query.trim() === '') {
+        throw new Error('web_search_pro needs a non-empty string "query".');
+      }
+      const cliArgs = ['-q', args.query, '--source', 'web', ...ownToolBudget()];
+      if (typeof args.max_results === 'number' && args.max_results > 0) {
+        cliArgs.push('--max-results', String(Math.floor(args.max_results)));
+      }
+      const ai = aiSettingsOf(readModsearchConfig());
+      const ignored = [];
+      if (Array.isArray(args.engines) && args.engines.length > 0) {
+        if (ai.allowEngines) {
+          const names = args.engines.filter((name) => typeof name === 'string' && name.trim());
+          if (names.length > 0) {
+            cliArgs.push('-e', names.join(','));
+          }
+        } else {
+          ignored.push(
+            'engines was ignored: AI engine selection is switched off in the modsearch settings card.',
+          );
+        }
+      }
+      if (args.mode === 'parallel') {
+        if (ai.allowParallel) {
+          cliArgs.push('--parallel');
+        } else {
+          ignored.push(
+            'mode parallel was ignored: AI parallel search is switched off in the modsearch settings card.',
+          );
+        }
+      }
+      const entry = await runCli(cliArgs, exec.signal);
+      return {
+        status: entry.status,
+        source: entry.source,
+        requestedSource: entry.requestedSource,
+        engine: entry.engine,
+        summary: entry.summary,
+        items: Array.isArray(entry.items) ? entry.items : [],
+        uncertainty: Array.isArray(entry.uncertainty) ? entry.uncertainty : [],
+        warnings: [
+          ...(Array.isArray(entry.warnings) ? entry.warnings : []),
+          ...ignored,
+        ],
+        attempts: Array.isArray(entry.attempts) ? entry.attempts : [],
       };
     },
   });
@@ -651,6 +790,10 @@ function engineSummary(config = readModsearchConfig(), env = process.env) {
       model: typeof fromFile.model === 'string' ? fromFile.model : '',
       hasKey: envKey || fileKey,
       enabled: coerceBoolean(fromFile.enabled) !== false,
+      // Parallel participation and the drag position: undefined means out of
+      // the parallel set and no drag override respectively.
+      parallel: coerceBoolean(fromFile.parallel) === true,
+      priority: typeof fromFile.priority === 'number' ? fromFile.priority : null,
       // An environment key wins over a file key at run time, so a card that
       // reported the file's would explain the wrong thing when a save appears
       // to change nothing.
@@ -665,7 +808,37 @@ function engineSummary(config = readModsearchConfig(), env = process.env) {
     engines,
     keyed: KEYED_ENGINES,
     models: MODEL_ENGINES,
+    ai: aiSettingsOf(config),
+    // The last real outcome per engine, straight from the state file: this is
+    // what the traffic lights render, and a probe (POST /modsearch/probe)
+    // refreshes it by running real searches through the CLI.
+    health: readHealthState().engineHealth,
   };
+}
+
+/** The state file next to the config file, same directory, same posture. */
+function modsearchStatePath() {
+  return join(dirname(modsearchConfigPath()), 'state.json');
+}
+
+/** Corrupt or missing state reads as no history; never throws. */
+function readHealthState() {
+  try {
+    const parsed = JSON.parse(readFileSync(modsearchStatePath(), 'utf8'));
+    const health =
+      parsed && typeof parsed === 'object' && parsed.engineHealth && typeof parsed.engineHealth === 'object'
+        ? parsed.engineHealth
+        : {};
+    const engineHealth = {};
+    for (const [engine, entry] of Object.entries(health)) {
+      if (entry && typeof entry === 'object' && typeof entry.ok === 'boolean' && typeof entry.at === 'string') {
+        engineHealth[canonicalEngine(engine)] = entry;
+      }
+    }
+    return { engineHealth };
+  } catch {
+    return { engineHealth: {} };
+  }
 }
 
 /**
@@ -691,6 +864,105 @@ function applyCardSettings(patch) {
         throw new Error(`unknown engine: ${patch.engine}`);
       }
       config.engine = engine;
+    }
+  }
+  // AI permission switches. false is the default, so only an explicit true
+  // needs to live in the file; a false un-sets it, same shape as enabled.
+  if (isPlainObject(patch?.ai)) {
+    config.ai = { ...(isPlainObject(config.ai) ? config.ai : {}) };
+    for (const field of ['allowEngines', 'allowParallel']) {
+      const value = patch.ai[field];
+      if (typeof value !== 'boolean') {
+        continue;
+      }
+      if (value) {
+        config.ai[field] = true;
+      } else {
+        delete config.ai[field];
+      }
+    }
+    if (Object.keys(config.ai).length === 0) {
+      delete config.ai;
+    }
+  }
+  // The drag ordering: a full list of search-engine names, first is tried
+  // first. Every named engine gets its index+1 as priority; a search engine
+  // the list omits loses any stored priority and falls back to the built-in
+  // order. `local` is a fetcher and never takes a position.
+  if (Array.isArray(patch?.order)) {
+    if (config.engines !== undefined && !isPlainObject(config.engines)) {
+      throw new Error('the "engines" section of the config file is not an object');
+    }
+    config.engines = { ...config.engines };
+    const named = new Set();
+    patch.order.forEach((name, index) => {
+      const engine = canonicalEngine(typeof name === 'string' ? name : '');
+      if (!CARD_ENGINES.includes(engine) || engine === 'local') {
+        throw new Error(`engine ${name} cannot take a chain position`);
+      }
+      named.add(engine);
+      const holders = fileKeysFor(engine, config);
+      const target = holders.length > 0 ? holders[holders.length - 1] : engine;
+      if (config.engines[target] !== undefined && !isPlainObject(config.engines[target])) {
+        throw new Error(`the "engines.${target}" entry of the config file is not an object`);
+      }
+      config.engines[target] = { ...config.engines[target], priority: index + 1 };
+    });
+    for (const engine of CARD_ENGINES) {
+      if (engine === 'local' || named.has(engine)) {
+        continue;
+      }
+      for (const holder of fileKeysFor(engine, config)) {
+        if (!isPlainObject(config.engines[holder])) {
+          throw new Error(`the "engines.${holder}" entry of the config file is not an object`);
+        }
+        const settings = { ...config.engines[holder] };
+        delete settings.priority;
+        if (Object.keys(settings).length === 0) {
+          delete config.engines[holder];
+        } else {
+          config.engines[holder] = settings;
+        }
+      }
+    }
+  }
+  // Parallel participation. true joins the parallel set; false (the default)
+  // removes the flag rather than storing it.
+  if (isPlainObject(patch?.parallel)) {
+    if (config.engines !== undefined && !isPlainObject(config.engines)) {
+      throw new Error('the "engines" section of the config file is not an object');
+    }
+    config.engines = { ...config.engines };
+    for (const rawName of Object.keys(patch.parallel)) {
+      const engine = canonicalEngine(rawName);
+      if (!CARD_ENGINES.includes(engine)) {
+        throw new Error(`unknown engine: ${rawName}`);
+      }
+      const value = patch.parallel[rawName];
+      if (typeof value !== 'boolean') {
+        continue;
+      }
+      const holders = fileKeysFor(engine, config);
+      if (!value) {
+        for (const holder of holders) {
+          if (!isPlainObject(config.engines[holder])) {
+            throw new Error(`the "engines.${holder}" entry of the config file is not an object`);
+          }
+          const settings = { ...config.engines[holder] };
+          delete settings.parallel;
+          if (Object.keys(settings).length === 0) {
+            delete config.engines[holder];
+          } else {
+            config.engines[holder] = settings;
+          }
+        }
+        continue;
+      }
+      const target = holders.length > 0 ? holders[holders.length - 1] : engine;
+      if (config.engines[target] !== undefined && !isPlainObject(config.engines[target])) {
+        throw new Error(`the "engines.${target}" entry of the config file is not an object`);
+      }
+      config.engines[target] = { ...config.engines[target], parallel: true };
     }
   }
   // Engine fields are edited one engine at a time, named by `target`. Absent
@@ -964,7 +1236,74 @@ function registerConfigRoute(ctx) {
       }
     },
   };
+  // The traffic-light probe: one real search per requested engine, through
+  // the CLI (which records health as any run does), so the card's lights come
+  // from evidence rather than optimism. This genuinely bills every engine it
+  // probes — the card confirms with the user before calling.
+  const probe = {
+    name: 'modsearch-probe',
+    kind: 'exact',
+    path: '/modsearch/probe',
+    handler: async (req, res) => {
+      const send = (status, body) => {
+        res.writeHead(status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(body));
+      };
+      if (req.method !== 'POST') {
+        res.writeHead(405).end();
+        return;
+      }
+      try {
+        const chunks = [];
+        let total = 0;
+        for await (const chunk of req) {
+          total += chunk.length;
+          if (total > 16 * 1024) {
+            send(413, { error: 'probe payload too large' });
+            req.destroy();
+            return;
+          }
+          chunks.push(chunk);
+        }
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+        const requested = Array.isArray(body?.engines)
+          ? body.engines
+              .map((name) => canonicalEngine(typeof name === 'string' ? name : ''))
+              .filter((name) => CARD_ENGINES.includes(name) && name !== 'local')
+          : [];
+        const names = [...new Set(requested.length > 0 ? requested : KEYED_ENGINES)].slice(0, 10);
+        const probeQuery =
+          typeof body?.query === 'string' && body.query.trim() !== ''
+            ? body.query.trim().slice(0, 200)
+            : 'connectivity probe';
+        const results = await Promise.all(
+          names.map(async (name) => {
+            const startedAt = Date.now();
+            try {
+              await runCli(
+                ['-q', probeQuery, '-e', name, '--source', 'web', '--max-results', '1',
+                 '--timeout', '45000', '--deadline', '60000'],
+                AbortSignal.timeout(70_000),
+              );
+              return { engine: name, ok: true, durationSeconds: (Date.now() - startedAt) / 1000 };
+            } catch (error) {
+              return {
+                engine: name,
+                ok: false,
+                error: String(error?.message ?? error).slice(0, 300),
+                durationSeconds: (Date.now() - startedAt) / 1000,
+              };
+            }
+          }),
+        );
+        send(200, { results, health: readHealthState().engineHealth });
+      } catch (error) {
+        send(400, { error: String(error?.message ?? error) });
+      }
+    },
+  };
   ctx.effect(() => ctx.webServer.register(route), 'modsearch: settings route');
+  ctx.effect(() => ctx.webServer.register(probe), 'modsearch: probe route');
 }
 
 // The half of the settings card that lives on this side of the socket,
