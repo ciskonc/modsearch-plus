@@ -537,12 +537,28 @@ function renderSearchEvidence(value) {
     );
   }
   lines.push(value.summary);
+  // Routing facts ride in the rendered text, not only in the structured
+  // value: which engine answered, and every warning — including the
+  // "engines/mode was ignored" notices the permission gates add. A model that
+  // cannot see them would believe a pinned engine was honored when it was
+  // not, which is exactly the silent-override this tool exists to prevent.
+  if (value.engine) {
+    lines.push(`[answered by: ${value.engine}]`);
+  }
+  const warnings = Array.isArray(value.warnings) ? value.warnings : [];
+  if (warnings.length > 0) {
+    lines.push('', 'Warnings:');
+    warnings.forEach((warning) => lines.push(`- ${warning}`));
+  }
   const items = value.items ?? [];
   if (items.length > 0) {
     lines.push('', 'Results:');
     items.forEach((item, index) => {
       const dated = item.published_at ? ` (${item.published_at})` : '';
-      lines.push(`${index + 1}. ${item.title}${dated} — ${item.url}`);
+      const sources = Array.isArray(item.engines) && item.engines.length > 0
+        ? ` [${item.engines.join(', ')}]`
+        : '';
+      lines.push(`${index + 1}. ${item.title}${dated} — ${item.url}${sources}`);
       if (item.snippet) {
         lines.push(`   ${item.snippet}`);
       }
