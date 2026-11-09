@@ -32,33 +32,40 @@ afterEach(() => {
 });
 
 describe('CLI entry point', () => {
-  it('uses Node argv layout when Electron runs as Node', async () => {
-    ({ restore: restoreHome } = withTempHome());
-    process.env.ELECTRON_RUN_AS_NODE = '1';
-    process.argv = [
-      process.execPath,
-      '/package/dist/main.js',
-      'doctor',
-      '--json',
-    ];
-    Object.defineProperty(process.versions, 'electron', {
-      value: '43.4.0',
-      configurable: true,
-    });
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    vi.spyOn(process, 'exit').mockImplementation((code) => {
-      throw new Error(`unexpected process.exit(${code})`);
-    });
+  it(
+    'uses Node argv layout when Electron runs as Node',
+    async () => {
+      ({ restore: restoreHome } = withTempHome());
+      process.env.ELECTRON_RUN_AS_NODE = '1';
+      process.argv = [
+        process.execPath,
+        '/package/dist/main.js',
+        'doctor',
+        '--json',
+      ];
+      Object.defineProperty(process.versions, 'electron', {
+        value: '43.4.0',
+        configurable: true,
+      });
+      const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`unexpected process.exit(${code})`);
+      });
 
-    await import('./main.ts');
+      await import('./main.ts');
 
-    expect(stdout).toHaveBeenCalledOnce();
-    expect(JSON.parse(String(stdout.mock.calls[0][0]))).toMatchObject({
-      node: { ok: true },
-      roles: expect.any(Array),
-    });
-  });
+      expect(stdout).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(stdout.mock.calls[0][0]))).toMatchObject({
+        node: { ok: true },
+        roles: expect.any(Array),
+      });
+    },
+    // The doctor runs a real config read over every engine; under a parallel
+    // suite that can outlast vitest's default five seconds without anything
+    // being wrong.
+    30_000,
+  );
 
   it('refuses to run when spawned from inside an engine', async () => {
     process.env.MODSEARCH_NESTED = '1';
@@ -98,9 +105,15 @@ describe('search flags', () => {
     // The entry awaits the whole action at top level, pending kills included,
     // so the import is not awaited here: a test may be holding those kills.
     const loading = import('./main.ts');
-    await vi.waitFor(() => {
-      expect(runSearch.mock.calls.length + stderr.mock.calls.length).toBeGreaterThan(0);
-    });
+    await vi.waitFor(
+      () => {
+        expect(runSearch.mock.calls.length + stderr.mock.calls.length).toBeGreaterThan(0);
+      },
+      // The CLI is a fresh module graph every run; importing commander and the
+      // whole config layer can take longer than waitFor's default second when
+      // the suite runs in parallel, and a slow start is not a broken flag.
+      { timeout: 15_000, interval: 50 },
+    );
     return { runSearch, stderr, exit, waitForPendingKills, loading };
   }
 
@@ -142,7 +155,10 @@ describe('search flags', () => {
       releaseKills = resolve;
     });
     const { exit, waitForPendingKills, loading } = await runCli(['-q', 'anything'], pendingKills);
-    await vi.waitFor(() => expect(waitForPendingKills).toHaveBeenCalled());
+    await vi.waitFor(() => expect(waitForPendingKills).toHaveBeenCalled(), {
+      timeout: 15_000,
+      interval: 50,
+    });
     vi.useFakeTimers();
     releaseKills();
     await loading;
