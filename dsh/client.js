@@ -67,8 +67,7 @@ window.__ModuleLoader__.load({
         probing: 'Probing…',
         parallel: 'P',
         parallelTick: 'P',
-        failoverTick: 'failover',
-        moveUp: 'Move up',
+        failoverTick: 'failover',        moveUp: 'Move up',
         moveDown: 'Move down',
         title: 'Search engine (ModSearch)',
         subtitle: 'Search engine provider configuration.',
@@ -954,7 +953,7 @@ window.__ModuleLoader__.load({
                       noteState[1]('');
                     },
                     `${name}-failover`,
-                    null,
+                    t.failoverTick,
                   ),
                   name === 'grok-cli'
                     ? h(
