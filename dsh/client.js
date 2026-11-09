@@ -60,12 +60,14 @@ window.__ModuleLoader__.load({
           'Off by default. Pinned engines cost only what you would spend yourself; a parallel run bills every whitelisted engine, so the two are separate switches.',
         chainSection: 'Chain order & health',
         chainHint:
-          'Drag arrows reorder the failover chain (top tried first). The dot is the last real call: green succeeded, red failed, grey never called. "P" joins the parallel set.',
+          'Drag arrows to reorder the chain (top tried first). The dot is the last real call: green succeeded, red failed, grey never called. Each row carries two ticks: the first joins the parallel set, the second keeps the engine in the failover chain.',
         probe: 'Test now',
         probeConfirm:
           'Run one real search on every enabled engine to refresh the lights? Each engine is really called and may bill (paid engines included).',
         probing: 'Probing…',
         parallel: 'P',
+        parallelTick: 'P',
+        failoverTick: 'failover',
         moveUp: 'Move up',
         moveDown: 'Move down',
         title: 'Search engine (ModSearch)',
@@ -123,12 +125,14 @@ window.__ModuleLoader__.load({
           '默认关闭。指定渠道只花你自己点名才会花的钱；并行会真实调用白名单里的每个引擎，所以两者分开控制。',
         chainSection: '链序与健康',
         chainHint:
-          '箭头调整故障转移顺序（越靠上越先尝试）。圆点是最近一次真实调用的结果：绿=成功，红=失败，灰=从未调用。"P" 表示参与并行。',
+          '箭头调整顺序（越靠上越先尝试）。圆点是最近一次真实调用的结果：绿=成功，红=失败，灰=从未调用。每行两个勾：左边是参与并行，右边是参与故障转移。',
         probe: '立即测试',
         probeConfirm:
           '对每个已启用的引擎各执行一次真实搜索来刷新状态灯？每个引擎都会被真实调用，付费引擎会产生实际费用。',
         probing: '测试中…',
         parallel: '并',
+        parallelTick: '并',
+        failoverTick: '故障转移',
         moveUp: '上移',
         moveDown: '下移',
         section: '引擎设置',
@@ -826,14 +830,31 @@ window.__ModuleLoader__.load({
                     ? t.trafficGreen
                     : `${t.trafficRed}${record.error ? `: ${String(record.error).slice(0, 140)}` : ''}`
                   : t.trafficGrey) + (record?.at ? ` · ${record.at}` : '');
-              const box = (checked2, label, onChange, keyName) =>
-                h('input', {
-                  type: 'checkbox',
-                  checked: checked2,
-                  'aria-label': `${name} ${label}`,
-                  key: keyName,
-                  onChange,
-                });
+              // Both ticks carry a visible label: a bare box beside another
+              // box reads as a duplicate, and "which one is which" is exactly
+              // the thing the row has to answer.
+              const box = (checked2, label, onChange, keyName, visible) =>
+                h(
+                  'label',
+                  {
+                    style: {
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                    },
+                  },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: checked2,
+                    'aria-label': `${name} ${label}`,
+                    key: keyName,
+                    onChange,
+                  }),
+                  visible ? h('span', null, visible) : null,
+                );
               return h(
                 'div',
                 {
@@ -908,21 +929,33 @@ window.__ModuleLoader__.load({
                 // and the aside says why it is different.
                 name === 'grok-cli'
                   ? null
-                  : box(inParallel, t.parallel, () => {
-                      draftState[1](
-                        Object.assign({}, draft, {
-                          parallel: Object.assign({}, draft.parallel, { [name]: !inParallel }),
-                        }),
-                      );
-                      noteState[1]('');
-                    }, `${name}-parallel`),
+                  : box(
+                      inParallel,
+                      t.parallel,
+                      () => {
+                        draftState[1](
+                          Object.assign({}, draft, {
+                            parallel: Object.assign({}, draft.parallel, { [name]: !inParallel }),
+                          }),
+                        );
+                        noteState[1]('');
+                      },
+                      `${name}-parallel`,
+                      t.parallelTick,
+                    ),
                 h(
                   'label',
                   { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' } },
-                  box(checked, 'failover', (event) => {
-                    draftState[1](toggleEngine(draft, name, event.target.checked));
-                    noteState[1]('');
-                  }, `${name}-failover`),
+                  box(
+                    checked,
+                    t.failoverTick,
+                    (event) => {
+                      draftState[1](toggleEngine(draft, name, event.target.checked));
+                      noteState[1]('');
+                    },
+                    `${name}-failover`,
+                    null,
+                  ),
                   name === 'grok-cli'
                     ? h(
                         'span',
@@ -934,11 +967,7 @@ window.__ModuleLoader__.load({
                         },
                         t.socialOnly,
                       )
-                    : h(
-                        'span',
-                        { style: { fontSize: '12px', color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))' } },
-                        'failover',
-                      ),
+                    : null,
                 ),
               );
             });
