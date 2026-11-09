@@ -131,6 +131,24 @@ function laterEntry(existing: CooldownEntry | undefined, incoming: CooldownEntry
 }
 
 /**
+ * The health section as it stands on disk, or undefined when there is none.
+ * Read raw: the cooldown loader only understands the cooldown section, and
+ * this writer must not reshape what the other writer left there.
+ */
+function readHealthSection(statePath: string): unknown {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== 'object') {
+      return undefined;
+    }
+    const health = parsed.engineHealth;
+    return health && typeof health === 'object' && !Array.isArray(health) ? health : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Read-modify-write the state file under an atomic rename. Two processes writing
  * at once used to clobber each other, because each wrote its whole in-memory
  * snapshot over the file, so the second write dropped whatever the first had
@@ -165,7 +183,16 @@ function updateStateOnDisk(
   }
   const unique = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   const tmp = path.join(dir, `.state.${unique}.tmp`);
-  fs.writeFileSync(tmp, `${JSON.stringify(merged, null, 2)}\n`, { mode: 0o600 });
+  // The file also carries the health records (the traffic lights the settings
+  // card renders). This writer owns the cooldown section only, so the health
+  // section rides along untouched: writing back just the cooldowns would
+  // wipe every engine's last known outcome on every run.
+  const payload: Record<string, unknown> = { engineCooldowns: merged.engineCooldowns };
+  const health = readHealthSection(statePath);
+  if (health !== undefined) {
+    payload.engineHealth = health;
+  }
+  fs.writeFileSync(tmp, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, statePath);
   try {
     fs.chmodSync(statePath, 0o600);

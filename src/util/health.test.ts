@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { buildCooldownController } from '../cooldown.ts';
 import { loadHealthState, recordHealth } from './health.ts';
 
 const tempDirs: string[] = [];
@@ -61,6 +62,24 @@ describe('the health record', () => {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
     expect(Object.keys(raw.engineCooldowns as object)).toEqual(['glm::key:0']);
     expect((raw.engineHealth as Record<string, { ok: boolean }>).minimax.ok).toBe(true);
+  });
+
+  it('survives a cooldown write, which owns the other section of the same file', () => {
+    // The cooldown controller and the health recorder share one state file.
+    // Each owns one section, and a writer that rewrote the whole file would
+    // erase the other's records — which is how the card's traffic lights
+    // went grey for every engine but the last one called.
+    const file = tempStatePath();
+    recordHealth('minimax', { ok: true }, file);
+    recordHealth('glm', { ok: false, error: 'glm has no search balance (1113)' }, file);
+
+    const controller = buildCooldownController({ cooldown: 'on' }, { statePath: file });
+    controller?.record('exa', new Error('exa is out of credits'), undefined);
+
+    const state = loadHealthState(file);
+    expect(Object.keys(state.engineHealth).sort()).toEqual(['glm', 'minimax']);
+    expect(state.engineHealth.glm.ok).toBe(false);
+    expect(state.engineHealth.minimax.ok).toBe(true);
   });
 
   it('reads a missing or corrupt store as no history instead of failing', () => {
