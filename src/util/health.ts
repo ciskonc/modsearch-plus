@@ -74,23 +74,47 @@ export function recordHealth(
   filePath = healthStatePath(),
 ): void {
   const key = canonicalEngineName(engine);
-  let cooldowns: unknown;
-  try {
-    cooldowns = readStateFile(filePath).engineCooldowns;
-  } catch {
-    cooldowns = undefined;
-  }
+  const existing = readStateFile(filePath);
   const entry: HealthEntry = {
     ok: outcome.ok,
     ...(outcome.ok ? {} : { error: redactSecrets(outcome.error ?? '', []) || undefined }),
     at: new Date().toISOString(),
     ...(outcome.durationSeconds === undefined ? {} : { durationSeconds: outcome.durationSeconds }),
   };
-  const state: Record<string, unknown> = { engineHealth: { [key]: entry } };
-  if (cooldowns !== undefined) {
-    state.engineCooldowns = cooldowns;
+  // Merge into the stored history. The record is one entry per engine, and a
+  // file that kept only the engine of the last call would light one row and
+  // grey every other one — the opposite of what the card is meant to show.
+  // The cooldown section rides along untouched.
+  const engineHealth = mergeHealthEntries(existing.engineHealth);
+  engineHealth[key] = entry;
+  const state: Record<string, unknown> = { engineHealth };
+  if (existing.engineCooldowns !== undefined) {
+    state.engineCooldowns = existing.engineCooldowns;
   }
   writeStateFile(filePath, state);
+}
+
+/** The stored health entries, canonical names, malformed rows dropped. */
+function mergeHealthEntries(raw: unknown): Record<string, HealthEntry> {
+  const engineHealth: Record<string, HealthEntry> = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [engine, entry] of Object.entries(raw as Record<string, unknown>)) {
+      if (entry && typeof entry === 'object') {
+        const record = entry as Record<string, unknown>;
+        if (typeof record.ok === 'boolean' && typeof record.at === 'string') {
+          engineHealth[canonicalEngineName(engine)] = {
+            ok: record.ok,
+            ...(typeof record.error === 'string' ? { error: record.error } : {}),
+            at: record.at,
+            ...(typeof record.durationSeconds === 'number'
+              ? { durationSeconds: record.durationSeconds }
+              : {}),
+          };
+        }
+      }
+    }
+  }
+  return engineHealth;
 }
 
 function writeStateFile(filePath: string, state: unknown): void {
