@@ -97,7 +97,7 @@ window.__ModuleLoader__.load({
         envNote:
           'This key comes from an environment variable, which overrides the config file. Clear the variable to let a saved key take effect.',
         autoTitle: 'Automatic engine chain',
-        autoHint: 'Checked engines may join failover. Only engines ready here are listed.',
+        autoHint: 'Two ticks per engine: parallel set and failover chain. Only engines ready here are listed.',
         autoUnknown: 'Engine status is unavailable right now, so every engine is listed.',
         autoEmpty: 'No engine is ready on this machine yet.',
         // Two engine-specific asides, each rendered by a branch of its own so
@@ -156,7 +156,7 @@ window.__ModuleLoader__.load({
         localNote: '内置抓取器直连读取网页，无需密钥和接口地址。',
         envNote: '该密钥来自环境变量，环境变量优先于配置文件。清掉变量后保存的密钥才会生效。',
         autoTitle: '自动引擎链',
-        autoHint: '勾选后可参与故障转移。这里只列出本机已就绪的引擎。',
+        autoHint: '每行两个勾：左边参与并行，右边参与故障转移。这里只列出本机已就绪的引擎。',
         autoUnknown: '暂时读不到引擎状态，所以列出全部引擎。',
         autoEmpty: '本机暂无就绪的引擎。',
         socialOnly: '仅 X 搜索',
