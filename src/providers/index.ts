@@ -9,6 +9,7 @@ import { httpFetchProvider } from './httpFetch.ts';
 import { keenableProvider } from './keenable.ts';
 import { minimaxProvider, minimaxWebSearchProvider } from './minimax.ts';
 import { tavilyProvider } from './tavily.ts';
+import { youcomProvider } from './youcom.ts';
 
 export type RunMode = 'search' | 'fetch';
 
@@ -94,6 +95,7 @@ const ENGINES: Record<string, SearchEngine> = {
   'minimax-websearch': minimaxWebSearchProvider,
   glm: glmProvider,
   'glm-coding': glmCodingProvider,
+  youcom: youcomProvider,
   'grok-cli': grokCliProvider,
   grok: grokCliProvider,
   // The built-in direct fetcher, canonically `local`. `http` and `direct` stay
@@ -111,9 +113,11 @@ export const ROLE_PREFERENCE: Record<Role, string[]> = {
   // Firecrawl leads: its keyless allowance works on a bare machine with no
   // signup, which is the product's zero-setup promise. Keenable is the second
   // keyless engine, so a bare machine still has a fallback when Firecrawl's
-  // daily allowance runs out. agy synthesizes and cites but its weekly quota
-  // is small, so it backs the keyless pair up rather than fronting the chain.
-  // Tavily and Exa are keyed backups.
+  // daily allowance runs out. You.com is the third, smallest keyless pool
+  // (100 a day per IP), there for when both run dry on a busy IP. agy
+  // synthesizes and cites but its weekly quota is small, so it backs the
+  // keyless engines up rather than fronting the chain. Tavily and Exa are
+  // keyed backups.
   // The China-market engines come last: they cost real money or plan quota
   // per call, so the free and flat-rate engines get the first attempt and
   // these only answer when those are missing or spent. A user who wants one
@@ -122,6 +126,7 @@ export const ROLE_PREFERENCE: Record<Role, string[]> = {
   search: [
     'firecrawl',
     'keenable',
+    'youcom',
     'antigravity-cli',
     'tavily',
     'exa',

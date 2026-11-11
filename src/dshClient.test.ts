@@ -119,6 +119,7 @@ const SUMMARY = {
     'minimax-websearch': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     'glm-coding': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     glm: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
+    youcom: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     'grok-cli': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     local: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
   },
@@ -369,6 +370,7 @@ describe('a save carries only what the save is about', () => {
         'minimax-websearch': true,
         'glm-coding': true,
         glm: true,
+        youcom: true,
         'grok-cli': true,
         local: true,
       },
@@ -619,15 +621,14 @@ function render(
       // one nested array (h passes the mapped options unspread), so walk
       // recursively. The preference tests read the select whose first option
       // is the automatic entry (value ''), which only that select has.
-      const flatten = (value: unknown): Array<Record<string, unknown> & { kids?: unknown[] }> => {
+      type VNode = { type: unknown; props: Record<string, unknown>; kids?: unknown[] };
+      const isNode = (value: unknown): value is VNode =>
+        typeof value === 'object' && value !== null && 'props' in value;
+      const flatten = (value: unknown): VNode[] => {
         if (Array.isArray(value)) {
           return value.flatMap(flatten);
         }
-        if (value && typeof value === 'object' && 'props' in value) {
-          const node = value as { kids?: unknown[] };
-          return [value as Record<string, unknown> & { kids?: unknown[] }];
-        }
-        return [];
+        return isNode(value) ? [value] : [];
       };
       const selects = built.filter((node) => node.type === 'select');
       const preference = selects.find((node) => {
@@ -638,7 +639,7 @@ function render(
         .filter((kid) => kid.type === 'option')
         .map((node) => ({
           value: node.props.value,
-          label: (node.kids ?? []).filter((kid) => typeof kid === 'string').join(''),
+          label: ((node.kids ?? []) as unknown[]).filter((kid) => typeof kid === 'string').join(''),
         }));
     })(),
     texts: built
@@ -653,6 +654,7 @@ const CHAIN_ENGINES_ORDER = [
   'exa',
   'firecrawl',
   'keenable',
+  'youcom',
   'minimax',
   'minimax-websearch',
   'glm-coding',
@@ -778,6 +780,7 @@ describe('the automatic engine chain lists what this machine can actually search
       'exa',
       'firecrawl',
       'keenable',
+      'youcom',
       'minimax',
       'minimax-websearch',
       'glm-coding',
@@ -819,6 +822,21 @@ describe('the automatic engine chain lists what this machine can actually search
       readiness: READINESS,
     });
     expect(keyed.texts.some((text) => note.test(text))).toBe(false);
+  });
+
+  it('says youcom needs no key and offers no key field', () => {
+    // You.com runs keyless only, so the card has no key to ask for and must
+    // not promise that a key raises the quota.
+    const view = render({ ...SUMMARY, engine: 'youcom', readiness: READINESS });
+    expect(view.texts.some((text) => /100 searches a day per IP/.test(text))).toBe(true);
+    expect(view.texts.some((text) => /Runs on the keyless free tier/i.test(text))).toBe(false);
+    expect(view.texts.some((text) => /local command-line tool/.test(text))).toBe(false);
+    expect(view.options.find((option) => option.value === 'youcom')?.label).toBe(
+      'youcom (keyless free tier)',
+    );
+    expect(render({ ...SUMMARY, engine: 'youcom' }, 'zh-CN').texts).toContain(
+      '走 You.com 免注册免费额度（每个 IP 每天 100 次），无需密钥和接口地址。',
+    );
   });
 });
 
@@ -954,6 +972,7 @@ describe('the preference list offers only engines a preference can mean', () => 
       'exa',
       'firecrawl',
       'keenable',
+      'youcom',
       'minimax',
       'minimax-websearch',
       'glm-coding',

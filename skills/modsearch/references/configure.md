@@ -10,7 +10,7 @@ Three jobs, called roles. Each role has engines that can do it:
 
 | Job | Engines | Configurable? |
 | :-- | :-- | :-- |
-| search the public web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa`, `minimax`, `glm-coding`, `glm`, `minimax-websearch` | preferred engine plus per-engine participation |
+| search the public web | `firecrawl`, `keenable`, `youcom`, `antigravity-cli`, `tavily`, `exa`, `minimax`, `glm-coding`, `glm`, `minimax-websearch` | preferred engine plus per-engine participation |
 | read one URL | the preferred engine if it can fetch, then `firecrawl`, `antigravity-cli`, `local` | per-engine participation |
 | search X (Twitter) | `grok-cli` | per-engine participation |
 
@@ -210,6 +210,12 @@ modsearch config set glm.model search_std        # search_std | search_pro | sea
 ```
 
 The Web Search API is billed per call against the account balance (0.01 CNY for `search_std`, 0.03 for `search_pro`, 0.05 for the Sogou and Quark engines). A coding-plan key covers model calls, not this service: an unfunded account answers 429 with code 1113, which modsearch reads as a spent quota and cools down rather than retrying. The query is capped at 70 characters by the API; a longer one is truncated, and the result says so.
+
+### youcom (search, keyless only)
+
+Works with no key and no signup, and sits third in the search order, after Firecrawl and Keenable. Requests go to `https://api.you.com/v1/agents/search`, which allows 100 searches a day per IP (shared by everyone on that IP). There is no `apiKey`, `baseURL`, or model setting, and no keyed upgrade. `--max-results` is capped at 50. Turn it off for automatic routing with `engines.youcom.enabled: false`, and `-e youcom` still forces it for one run.
+
+You.com searches only, so `-u` with `-e youcom` is an error. Like Keenable, it returns ranked links with snippets (and a publish date from You.com's `page_age` when it has one) but writes no synthesis, so its summary is mechanical, a warning says so, and the evidence is in `items`.
 
 ### Third-party compatible endpoints (tavily, exa, firecrawl, keenable, minimax, glm)
 

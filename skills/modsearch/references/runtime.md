@@ -10,7 +10,7 @@ shell syntax.
 
 ## Pinned version
 
-- Pinned CLI version: 5.10.11
+- Pinned CLI version: 5.10.13
 - npm package: `@ciskonc/modsearch`
 - CLI binary name: `modsearch`
 

@@ -10,11 +10,11 @@
 
 | 工作 | 引擎 | 可配置吗 |
 | :-- | :-- | :-- |
-| 搜公开网页 | `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm-coding`、`glm`、`minimax-websearch` | 首选引擎加每引擎参与开关 |
+| 搜公开网页 | `firecrawl`、`keenable`、`youcom`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm-coding`、`glm`、`minimax-websearch` | 首选引擎加每引擎参与开关 |
 | 读一个 URL | 首选引擎（若它能抓取），然后是 `firecrawl`、`antigravity-cli`、`local` | 每引擎参与开关 |
 | 搜 X（推特） | `grok-cli` | 每引擎参与开关 |
 
-搜索顺序固定为 `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm-coding`、`glm`、`minimax-websearch`。抓取顺序是 `firecrawl`、`antigravity-cli`、`local`。每个引擎默认都参与。`engines.<name>.enabled: false` 会先排除一个引擎，可用性再过滤剩余名单，额度冷却最后重排就绪链（见下文）。Firecrawl 领跑两条链，因为它的免注册通道在裸机上就能用，不要账号不要 key。Keenable 排搜索第二也是同样的理由：Firecrawl 额度用完时，裸机上还有一个免注册的后备。中国区引擎故意排在链尾：它们每次调用都要花钱或消耗套餐额度，所以免费引擎先上，只有前面的引擎缺失或额度耗尽时才轮到它们作答。用 `engine` 固定其中一个可以把它提到最前，同时仍保留降级。
+搜索顺序固定为 `firecrawl`、`keenable`、`youcom`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm-coding`、`glm`、`minimax-websearch`。抓取顺序是 `firecrawl`、`antigravity-cli`、`local`。每个引擎默认都参与。`engines.<name>.enabled: false` 会先排除一个引擎，可用性再过滤剩余名单，额度冷却最后重排就绪链（见下文）。Firecrawl 领跑两条链，因为它的免注册通道在裸机上就能用，不要账号不要 key。Keenable 排搜索第二也是同样的理由：Firecrawl 额度用完时，裸机上还有一个免注册的后备。中国区引擎故意排在链尾：它们每次调用都要花钱或消耗套餐额度，所以免费引擎先上，只有前面的引擎缺失或额度耗尽时才轮到它们作答。用 `engine` 固定其中一个可以把它提到最前，同时仍保留降级。
 
 从这张表能推出两个事实，它们回答大多数问题：
 
@@ -209,6 +209,12 @@ modsearch config set glm.model search_std        # search_std | search_pro | sea
 ```
 
 Web Search API 按次从账户余额扣费（`search_std` 0.01 元，`search_pro` 0.03 元，搜狗和夸克引擎 0.05 元）。coding plan 的 key 只覆盖模型调用，不覆盖这项服务：账户没余额时返回 429 和错误码 1113，modsearch 把它读成额度耗尽，转入冷却而不是继续重试。API 对查询词有 70 字符上限，超出的会被截断，结果里会写明这一点。
+
+### youcom（搜索，仅免注册）
+
+无需任何密钥和注册，排在搜索顺序第三位，紧跟 Firecrawl 和 Keenable。请求发往 `https://api.you.com/v1/agents/search`，每 IP 每天限 100 次（同 IP 所有人共享）。没有 `apiKey`、`baseURL` 或模型设置，也没有付费升级。`--max-results` 上限 50。想把它移出自动路由用 `engines.youcom.enabled: false`，`-e youcom` 仍可单次强制使用。
+
+You.com 只能搜索，`-u` 配 `-e youcom` 会报错。与 Keenable 类似，它返回带摘要的排名链接（有发布日期时带 `page_age`），不做综合，摘要为机械式并有说明，证据在 `items` 里。
 
 ### 第三方兼容端点（tavily、exa、firecrawl、keenable、minimax、glm）
 
