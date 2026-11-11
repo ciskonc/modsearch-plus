@@ -1019,41 +1019,6 @@ window.__ModuleLoader__.load({
               'div',
               null,
               fieldRow(
-                t.glmChannel,
-                h(
-                  'select',
-                  {
-                    value: glmChannel,
-                    'aria-label': t.glmChannel,
-                    onChange: (event) => {
-                      draftState[1](setGlmChannel(draft, event.target.value));
-                      noteState[1]('');
-                    },
-                    style: {
-                      appearance: 'none',
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
-                      background: 'transparent',
-                      color: 'inherit',
-                      font: 'inherit',
-                      fontSize: '13px',
-                      colorScheme: darkCard ? 'dark' : 'light',
-                    },
-                  },
-                  glmChannelOptions.map((option) =>
-                    h(
-                      'option',
-                      { key: option.value, value: option.value, style: optionPaint },
-                      option.label,
-                    ),
-                  ),
-                ),
-                'glm-channel',
-                t.glmChannel,
-              ),
-              fieldRow(
                 t.engine,
                 h(
                   'select',
@@ -1114,6 +1079,45 @@ window.__ModuleLoader__.load({
               // having done nothing.
               canKey && current.keySource === 'env' ? hint(t.envNote, 'envnote') : null,
               canModel ? textField(t.model, 'model', t.modelFallback) : null,
+              // The Zhipu pair shares one channel choice; it lives in the
+              // glm engine's own settings rather than as a permanent block.
+              draft.engine === 'glm' || draft.engine === 'glm-coding'
+                ? fieldRow(
+                    t.glmChannel,
+                    h(
+                      'select',
+                      {
+                        value: glmChannel,
+                        'aria-label': t.glmChannel,
+                        onChange: (event) => {
+                          draftState[1](setGlmChannel(draft, event.target.value));
+                          noteState[1]('');
+                        },
+                        style: {
+                          appearance: 'none',
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
+                          background: 'transparent',
+                          color: 'inherit',
+                          font: 'inherit',
+                          fontSize: '13px',
+                          colorScheme: darkCard ? 'dark' : 'light',
+                        },
+                      },
+                      glmChannelOptions.map((option) =>
+                        h(
+                          'option',
+                          { key: option.value, value: option.value, style: optionPaint },
+                          option.label,
+                        ),
+                      ),
+                    ),
+                    'glm-channel',
+                    t.glmChannel,
+                  )
+                : null,
               // One control for the two Zhipu engines: which channel GLM
             // search may use. It drives the same failover flags the rows
             // below carry, so a save travels through the existing channel.
