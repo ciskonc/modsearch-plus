@@ -1055,13 +1055,6 @@ window.__ModuleLoader__.load({
               );
             });
 
-            const glmChannel = glmChannelOf(draft);
-            const glmChannelOptions = [
-              { value: 'auto', label: t.glmChannelAuto },
-              { value: 'coding', label: t.glmChannelCoding },
-              { value: 'rest', label: t.glmChannelRest },
-              { value: 'off', label: t.glmChannelOff },
-            ];
             const darkCard = cardThemeIsDark();
             const optionPaint = darkCard
               ? { color: '#f2f2f2', background: '#23262a' }
