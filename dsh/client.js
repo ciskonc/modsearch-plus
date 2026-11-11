@@ -959,6 +959,46 @@ window.__ModuleLoader__.load({
                 // how the user keeps X requests on the documented degrade
                 // path. It gets no parallel tick (it searches X, not the web)
                 // and the aside says why it is different.
+                // The two Zhipu engines carry the shared channel selector
+                // inside their own rows: this is where a user decides which
+                // GLM channel runs, not in a detached block at the top.
+                name === 'glm-coding' || name === 'glm'
+                  ? h(
+                      'select',
+                      {
+                        value: glmChannelOf(draft),
+                        'aria-label': `${name} ${t.glmChannel}`,
+                        title: t.glmChannel,
+                        onChange: (event) => {
+                          const value = event.target.value;
+                          draftState[1](setGlmChannel(draft, value));
+                          noteState[1]('');
+                        },
+                        style: {
+                          appearance: 'none',
+                          font: 'inherit',
+                          fontSize: '12px',
+                          lineHeight: 1.5,
+                          cursor: 'pointer',
+                          border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
+                          borderRadius: '8px',
+                          padding: '3px 8px',
+                          background: 'transparent',
+                          color: 'var(--dsw-alias-label-secondary, inherit)',
+                          colorScheme: cardThemeIsDark() ? 'dark' : 'light',
+                          maxWidth: '150px',
+                        },
+                      },
+                      [
+                        { value: 'auto', label: t.glmChannelAuto },
+                        { value: 'coding', label: t.glmChannelCoding },
+                        { value: 'rest', label: t.glmChannelRest },
+                        { value: 'off', label: t.glmChannelOff },
+                      ].map((option) =>
+                        h('option', { key: option.value, value: option.value }, option.label),
+                      ),
+                    )
+                  : null,
                 name === 'grok-cli'
                   ? null
                   : box(
@@ -1079,45 +1119,7 @@ window.__ModuleLoader__.load({
               // having done nothing.
               canKey && current.keySource === 'env' ? hint(t.envNote, 'envnote') : null,
               canModel ? textField(t.model, 'model', t.modelFallback) : null,
-              // The Zhipu pair shares one channel choice; it lives in the
-              // glm engine's own settings rather than as a permanent block.
-              draft.engine === 'glm' || draft.engine === 'glm-coding'
-                ? fieldRow(
-                    t.glmChannel,
-                    h(
-                      'select',
-                      {
-                        value: glmChannel,
-                        'aria-label': t.glmChannel,
-                        onChange: (event) => {
-                          draftState[1](setGlmChannel(draft, event.target.value));
-                          noteState[1]('');
-                        },
-                        style: {
-                          appearance: 'none',
-                          width: '100%',
-                          padding: '8px 12px',
-                          borderRadius: '8px',
-                          border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
-                          background: 'transparent',
-                          color: 'inherit',
-                          font: 'inherit',
-                          fontSize: '13px',
-                          colorScheme: darkCard ? 'dark' : 'light',
-                        },
-                      },
-                      glmChannelOptions.map((option) =>
-                        h(
-                          'option',
-                          { key: option.value, value: option.value, style: optionPaint },
-                          option.label,
-                        ),
-                      ),
-                    ),
-                    'glm-channel',
-                    t.glmChannel,
-                  )
-                : null,
+
               // One control for the two Zhipu engines: which channel GLM
             // search may use. It drives the same failover flags the rows
             // below carry, so a save travels through the existing channel.
