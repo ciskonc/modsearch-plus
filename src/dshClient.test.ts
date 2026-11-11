@@ -614,12 +614,33 @@ function render(
           text: textOf(node.kids),
         };
       }),
-    options: built
-      .filter((node) => node.type === 'option')
-      .map((node) => ({
-        value: node.props.value,
-        label: node.kids.filter((kid) => typeof kid === 'string').join(''),
-      })),
+    options: (() => {
+      // Two selects render (GLM channel, preference); select kids arrive as
+      // one nested array (h passes the mapped options unspread), so walk
+      // recursively. The preference tests read the select whose first option
+      // is the automatic entry (value ''), which only that select has.
+      const flatten = (value: unknown): Array<Record<string, unknown> & { kids?: unknown[] }> => {
+        if (Array.isArray(value)) {
+          return value.flatMap(flatten);
+        }
+        if (value && typeof value === 'object' && 'props' in value) {
+          const node = value as { kids?: unknown[] };
+          return [value as Record<string, unknown> & { kids?: unknown[] }];
+        }
+        return [];
+      };
+      const selects = built.filter((node) => node.type === 'select');
+      const preference = selects.find((node) => {
+        const kids = flatten(node.kids).filter((kid) => kid.type === 'option');
+        return kids.some((kid) => kid.props.value === '');
+      });
+      return flatten(preference?.kids)
+        .filter((kid) => kid.type === 'option')
+        .map((node) => ({
+          value: node.props.value,
+          label: (node.kids ?? []).filter((kid) => typeof kid === 'string').join(''),
+        }));
+    })(),
     texts: built
       .flatMap((node) => node.kids)
       .filter((kid): kid is string => typeof kid === 'string'),

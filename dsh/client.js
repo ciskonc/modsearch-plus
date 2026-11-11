@@ -68,7 +68,12 @@ window.__ModuleLoader__.load({
         probing: 'Probing…',
         parallel: 'P',
         parallelTick: 'P',
-        failoverTick: 'failover',        moveUp: 'Move up',
+        failoverTick: 'failover',
+        glmChannel: 'GLM channel',
+        glmChannelAuto: 'Plan credits first, then balance',
+        glmChannelCoding: 'Coding-plan credits (MCP)',
+        glmChannelRest: 'Account balance (REST API)',
+        glmChannelOff: 'Neither enabled',        moveUp: 'Move up',
         moveDown: 'Move down',
         title: 'Search engine (ModSearch)',
         subtitle: 'Search engine provider configuration.',
@@ -133,6 +138,11 @@ window.__ModuleLoader__.load({
         parallel: '并',
         parallelTick: '并',
         failoverTick: '故障转移',
+        glmChannel: 'GLM 通道',
+        glmChannelAuto: '自动（先套餐积分，后余额）',
+        glmChannelCoding: '编程套餐积分（MCP）',
+        glmChannelRest: '账户余额（REST API）',
+        glmChannelOff: '都不启用',
         moveUp: '上移',
         moveDown: '下移',
         section: '引擎设置',
@@ -259,6 +269,24 @@ window.__ModuleLoader__.load({
       if (engine !== '' && chainEngines(summary).indexOf(engine) >= 0) {
         next.enabled[engine] = true;
       }
+      return next;
+    }
+
+    /**
+     * Which Zhipu channel the two glm engines may use, read from the failover
+     * flags: both on is the chain (plan credits first), a single one on pins
+     * that channel, both off disables Zhipu search entirely.
+     */
+    function glmChannelOf(draft) {
+      const coding = draft.enabled?.['glm-coding'] !== false;
+      const rest = draft.enabled?.glm !== false;
+      return coding && rest ? 'auto' : coding ? 'coding' : rest ? 'rest' : 'off';
+    }
+
+    /** Apply a channel choice as failover flags on the two engines. */
+    function setGlmChannel(draft, channel) {
+      let next = toggleEngine(draft, 'glm-coding', channel === 'auto' || channel === 'coding');
+      next = toggleEngine(next, 'glm', channel === 'auto' || channel === 'rest');
       return next;
     }
 
@@ -972,6 +1000,13 @@ window.__ModuleLoader__.load({
               );
             });
 
+            const glmChannel = glmChannelOf(draft);
+            const glmChannelOptions = [
+              { value: 'auto', label: t.glmChannelAuto },
+              { value: 'coding', label: t.glmChannelCoding },
+              { value: 'rest', label: t.glmChannelRest },
+              { value: 'off', label: t.glmChannelOff },
+            ];
             const darkCard = cardThemeIsDark();
             const optionPaint = darkCard
               ? { color: '#f2f2f2', background: '#23262a' }
@@ -979,6 +1014,41 @@ window.__ModuleLoader__.load({
             body = h(
               'div',
               null,
+              fieldRow(
+                t.glmChannel,
+                h(
+                  'select',
+                  {
+                    value: glmChannel,
+                    'aria-label': t.glmChannel,
+                    onChange: (event) => {
+                      draftState[1](setGlmChannel(draft, event.target.value));
+                      noteState[1]('');
+                    },
+                    style: {
+                      appearance: 'none',
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
+                      background: 'transparent',
+                      color: 'inherit',
+                      font: 'inherit',
+                      fontSize: '13px',
+                      colorScheme: darkCard ? 'dark' : 'light',
+                    },
+                  },
+                  glmChannelOptions.map((option) =>
+                    h(
+                      'option',
+                      { key: option.value, value: option.value, style: optionPaint },
+                      option.label,
+                    ),
+                  ),
+                ),
+                'glm-channel',
+                t.glmChannel,
+              ),
               fieldRow(
                 t.engine,
                 h(
@@ -1032,7 +1102,10 @@ window.__ModuleLoader__.load({
               // having done nothing.
               canKey && current.keySource === 'env' ? hint(t.envNote, 'envnote') : null,
               canModel ? textField(t.model, 'model', t.modelFallback) : null,
-              fieldRow(
+              // One control for the two Zhipu engines: which channel GLM
+            // search may use. It drives the same failover flags the rows
+            // below carry, so a save travels through the existing channel.
+            fieldRow(
                 h(
                   'span',
                   null,
