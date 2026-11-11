@@ -1012,10 +1012,27 @@ describe('the preferred-engine menu stays readable in the host theme', () => {
   const LIGHT_OPTION = { color: '#23262a', background: '#f2f2f2' };
   const DARK_OPTION = { color: '#f2f2f2', background: '#23262a' };
 
+  function flattenNodes(value: unknown): Node[] {
+    if (Array.isArray(value)) {
+      return value.flatMap(flattenNodes);
+    }
+    return isNode(value) ? [value] : [];
+  }
+
   function menuOf(view: Rendered): { select: Node | undefined; options: Node[] } {
+    // Two selects render now; the readability contract is about the
+    // preference menu, identified by its automatic entry (value ''). Select
+    // kids arrive as a nested array (h passes the mapped options unspread),
+    // so flatten before matching.
+    const selects = view.nodes.filter((node) => node.type === 'select');
+    const preference = selects.find((node) =>
+      flattenNodes(node.kids).some(
+        (kid) => kid.type === 'option' && kid.props.value === '',
+      ),
+    );
     return {
-      select: view.nodes.find((node) => node.type === 'select'),
-      options: view.nodes.filter((node) => node.type === 'option'),
+      select: preference,
+      options: flattenNodes(preference?.kids).filter((kid) => kid.type === 'option'),
     };
   }
 

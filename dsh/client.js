@@ -995,7 +995,18 @@ window.__ModuleLoader__.load({
                         { value: 'rest', label: t.glmChannelRest },
                         { value: 'off', label: t.glmChannelOff },
                       ].map((option) =>
-                        h('option', { key: option.value, value: option.value }, option.label),
+                        h(
+                          'option',
+                          {
+                            key: option.value,
+                            value: option.value,
+                            style: {
+                              color: cardThemeIsDark() ? '#f2f2f2' : '#23262a',
+                              background: cardThemeIsDark() ? '#23262a' : '#f2f2f2',
+                            },
+                          },
+                          option.label,
+                        ),
                       ),
                     )
                   : null,
