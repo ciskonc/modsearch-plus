@@ -8,7 +8,7 @@
 
 <p align="center">🥇 <b>The strongest free web search plugin for DeepSeek Harness (dsh)</b> 🥇</p>
 
-<p align="center">Engines: <b>Firecrawl</b> (keyless, default) · <b>Keenable</b> (keyless) · <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>MiniMax</b> · <b>Zhipu GLM</b> · <b>Grok (X)</b> · <b>local</b>, with automatic failover</p>
+<p align="center">Engines: <b>Firecrawl</b> (keyless, default) · <b>Keenable</b> (keyless) · <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>MiniMax</b> · <b>Zhipu GLM ×2</b> · <b>Grok (X)</b> · <b>local</b>, with automatic failover</p>
 
 <p align="center">
   <a href="./README.zh-CN.md">简体中文</a> ·
@@ -76,6 +76,7 @@ Firecrawl and Keenable work with zero setup. Every other engine is one command a
 | Exa | web search | $10/month recurring credit (~1,400 searches), no card | `modsearch config set exa.apiKey <key>` |
 | MiniMax | web search | M Plan subscription key, model-free search endpoint, no model call | `modsearch config set minimax.apiKey <key>` |
 | MiniMax web_search | web search + written answer | runs a model call with MiniMax's server-side web_search tool (0.03 CNY a call) | `modsearch config set minimax-websearch.apiKey <key>` |
+| Zhipu GLM (coding plan) | web search | included in the coding plan: searches the plan-exclusive MCP, draws down plan credits | `modsearch config set glm-coding.apiKey <key>` |
 | Zhipu GLM | web search | Web Search API, billed per call (0.01 CNY a call from `search_std`) | `modsearch config set glm.apiKey <key>` |
 | Grok Build | X (Twitter) search | rides SuperGrok or X Premium | install `grok` and sign in |
 | local | page fetch | built in, nothing to install | nothing |

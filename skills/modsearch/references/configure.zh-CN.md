@@ -10,11 +10,11 @@
 
 | 工作 | 引擎 | 可配置吗 |
 | :-- | :-- | :-- |
-| 搜公开网页 | `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm`、`minimax-websearch` | 首选引擎加每引擎参与开关 |
+| 搜公开网页 | `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm-coding`、`glm`、`minimax-websearch` | 首选引擎加每引擎参与开关 |
 | 读一个 URL | 首选引擎（若它能抓取），然后是 `firecrawl`、`antigravity-cli`、`local` | 每引擎参与开关 |
 | 搜 X（推特） | `grok-cli` | 每引擎参与开关 |
 
-搜索顺序固定为 `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm`、`minimax-websearch`。抓取顺序是 `firecrawl`、`antigravity-cli`、`local`。每个引擎默认都参与。`engines.<name>.enabled: false` 会先排除一个引擎，可用性再过滤剩余名单，额度冷却最后重排就绪链（见下文）。Firecrawl 领跑两条链，因为它的免注册通道在裸机上就能用，不要账号不要 key。Keenable 排搜索第二也是同样的理由：Firecrawl 额度用完时，裸机上还有一个免注册的后备。中国区引擎故意排在链尾：它们每次调用都要花钱或消耗套餐额度，所以免费引擎先上，只有前面的引擎缺失或额度耗尽时才轮到它们作答。用 `engine` 固定其中一个可以把它提到最前，同时仍保留降级。
+搜索顺序固定为 `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`minimax`、`glm-coding`、`glm`、`minimax-websearch`。抓取顺序是 `firecrawl`、`antigravity-cli`、`local`。每个引擎默认都参与。`engines.<name>.enabled: false` 会先排除一个引擎，可用性再过滤剩余名单，额度冷却最后重排就绪链（见下文）。Firecrawl 领跑两条链，因为它的免注册通道在裸机上就能用，不要账号不要 key。Keenable 排搜索第二也是同样的理由：Firecrawl 额度用完时，裸机上还有一个免注册的后备。中国区引擎故意排在链尾：它们每次调用都要花钱或消耗套餐额度，所以免费引擎先上，只有前面的引擎缺失或额度耗尽时才轮到它们作答。用 `engine` 固定其中一个可以把它提到最前，同时仍保留降级。
 
 从这张表能推出两个事实，它们回答大多数问题：
 
@@ -70,13 +70,13 @@ JSON 不支持注释，所以每个字段的说明在这里：
 
 | 字段 | 类型 | 作用范围 | 含义 |
 | :-- | :-- | :-- | :-- |
-| `engine` | string | 顶层 | 由哪个引擎搜索。空表示自动（用本机可用的最好那个）。取值 `antigravity-cli`、`tavily`、`exa`、`firecrawl`、`keenable`、`minimax`、`minimax-websearch`、`glm` 之一。别名 `agy`、`antigravity`、`grok`、`http`、`direct`、`zhipu`、`bigmodel`、`minimax-search` 也接受，会归一为正式名。 |
+| `engine` | string | 顶层 | 由哪个引擎搜索。空表示自动（用本机可用的最好那个）。取值 `antigravity-cli`、`tavily`、`exa`、`firecrawl`、`keenable`、`minimax`、`minimax-websearch`、`glm-coding`、`glm` 之一。别名 `agy`、`antigravity`、`grok`、`http`、`direct`、`zhipu`、`bigmodel`、`minimax-search` 也接受，会归一为正式名。 |
 | `cooldown` | `"on"` / `"off"` | 顶层 | 额度冷却故障转移。默认开。关掉后不读不写任何状态，路由与从前完全一致。 |
 | `allowPrivateNetwork` | boolean | 顶层 | 允许本地抓取器访问私有或保留地址，包括 VPN 使用的其他保留地址段和 hosts 文件加速器。默认 `false`。DNS 返回的 `198.18.0.0/15` 地址已按 fake-ip 占位值放行，无需此开关。在 URL 中直写该地址段，开关关闭时仍会被拦截。此设置从不授权 Firecrawl 云端披露，URL 中直写的私有和保留目标始终不会发往云端。对于 DNS 结果，只有应用 fake-ip 例外后所有地址仍被判为私有或保留地址时，Firecrawl 才会拒绝披露。 |
 | `engines` | object | 顶层 | 按引擎正式名分组的每引擎设置。 |
 | `engines.<name>.enabled` | boolean | 所有引擎 | 是否允许自动路由使用该引擎。省略表示启用。设为 `false` 会排除它，设为 `true` 会删除覆盖并回到内置默认。单次显式 `--engine` 仍会强制使用该引擎。 |
-| `engines.<name>.apiKey` | string | `tavily`、`exa`、`firecrawl`、`keenable`、`minimax`、`minimax-websearch`、`glm` | 一个 API key，或用英文逗号分隔的多个 key。解析时会忽略空白和空项。鉴权、限流或配额失败时按顺序轮换 key。网络、5xx 或解析失败时直接切换下一个引擎。也可用环境变量 `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY` / `MINIMAX_API_KEY` / `ZAI_API_KEY`，环境变量优先于文件。 |
-| `engines.<name>.baseURL` | string | `tavily`、`exa`、`firecrawl`、`keenable`、`minimax`、`minimax-websearch`、`glm` | 替换官方主机的接口地址：兼容的第三方网关、代理、自建部署。必须是完整的 http(s) URL。也可用环境变量 `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL` / `MINIMAX_BASE_URL` / `ZAI_BASE_URL`。设为空即取消。详见下方端点一节。 |
+| `engines.<name>.apiKey` | string | `tavily`、`exa`、`firecrawl`、`keenable`、`minimax`、`minimax-websearch`、`glm-coding`、`glm` | 一个 API key，或用英文逗号分隔的多个 key。解析时会忽略空白和空项。鉴权、限流或配额失败时按顺序轮换 key。网络、5xx 或解析失败时直接切换下一个引擎。也可用环境变量 `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY` / `MINIMAX_API_KEY` / `ZAI_API_KEY`，环境变量优先于文件。 |
+| `engines.<name>.baseURL` | string | `tavily`、`exa`、`firecrawl`、`keenable`、`minimax`、`minimax-websearch`、`glm-coding`、`glm` | 替换官方主机的接口地址：兼容的第三方网关、代理、自建部署。必须是完整的 http(s) URL。也可用环境变量 `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL` / `MINIMAX_BASE_URL` / `ZAI_BASE_URL`。设为空即取消。详见下方端点一节。 |
 | `engines.firecrawl.keylessFetch` | boolean | `firecrawl` | 允许 Firecrawl 在无 key 时抓取公网页面。默认 `true`（免注册抓取开箱即开）。设为 `false` 可让自动抓取远离 Firecrawl 云端。配置了 key 或显式选择 Firecrawl 引擎时仍会启用。 |
 | `engines.<name>.bin` | string | `antigravity-cli`、`grok-cli` | 该引擎 CLI 的路径。默认在 `PATH` 上找 `agy` 和 `grok`。 |
 | `engines.<name>.model` | string | `antigravity-cli`、`minimax-websearch`、`glm` | 引擎使用的模型。`antigravity-cli` 默认 `gemini-3.6-flash-low`。`minimax-websearch` 默认 `MiniMax-M3.1-Flash`，这是 MiniMax 为其服务端 web_search 工具公布的模型。`glm` 把它读作搜索引擎编码：`search_std`（每次 0.01 元）、`search_pro`（0.03）、`search_pro_sogou` 和 `search_pro_quark`（各 0.05）。 |
@@ -163,6 +163,17 @@ modsearch config set keenable.apiKey <key>
 ```
 
 Keenable 只搜索，所以 `-u` 配 `-e keenable` 会报错。它和 Exa 一样返回排好序的链接和片段（Keenable 有发布日期时也带上），但不写综述，所以 summary 是机械拼的，会有一条 warning 说明这一点，证据在 `items` 里。
+
+### glm-coding（搜索，智谱编程套餐专属 MCP）
+
+智谱编程套餐自带搜索权益，但走的是专属端点：远程 MCP 服务器 `/api/mcp/web_search_prime/mcp`，其 `web_search_prime` 工具扣**套餐积分**而不是账户余额。被 Web Search REST API 以 429（code 1113）拒绝的套餐 key 在这里能正常搜索——这正是它和 `glm` 并存的原因。
+
+```bash
+modsearch config set glm-coding.apiKey <key>
+# 或环境变量：export ZAI_API_KEY=<key>
+```
+
+引擎每次搜索跑一遍 MCP 握手（initialize，再携带会话 id 调 tools/call）。返回字段为 title、link、content、refer。注意官方文档写的工具名 `webSearchPrime` 是错的，服务器实际注册的是 `web_search_prime`。它在链中排在 `glm` 前面：先扣套餐积分，再动账户余额。
 
 ### minimax（搜索，免模型，MiniMax key）
 

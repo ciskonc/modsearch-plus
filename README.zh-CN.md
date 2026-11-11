@@ -76,6 +76,7 @@ Firecrawl 和 Keenable 零配置直接可用，其余引擎各一条命令。key
 | Exa | 网页搜索 | 每月 $10 循环额度（约 1,400 次），不绑卡 | `modsearch config set exa.apiKey <key>` |
 | MiniMax | 网页搜索 | M Plan 订阅 key，免模型搜索端点，不消耗模型调用 | `modsearch config set minimax.apiKey <key>` |
 | MiniMax web_search | 网页搜索 + 成文答案 | 跑一次模型调用，用 MiniMax 服务端 web_search 工具（每次 0.03 元） | `modsearch config set minimax-websearch.apiKey <key>` |
+| 智谱 GLM（编程套餐） | 网页搜索 | 套餐自带：走套餐专属 MCP，扣套餐积分 | `modsearch config set glm-coding.apiKey <key>` |
 | 智谱 GLM | 网页搜索 | Web Search API，按次计费（`search_std` 每次 0.01 元） | `modsearch config set glm.apiKey <key>` |
 | Grok Build | X（推特）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 `grok` 并登录 |
 | local | 单页抓取 | 内置，零安装 | 无需任何操作 |

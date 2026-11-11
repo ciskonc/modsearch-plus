@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New search engine `glm-coding`: Zhipu's coding plan includes a search entitlement, but on its own endpoint — the plan-exclusive remote MCP server `/api/mcp/web_search_prime/mcp` — whose `web_search_prime` tool draws down plan credits instead of the account balance. A plan key that the Web Search REST API rejects with 429 (code 1113) searches fine through it, which is why it sits ahead of `glm` in the chain: plan credits first, account balance second. The engine runs the MCP initialize/tools-call handshake per search, carries the session id, and reads the double-encoded JSON result. The official docs name the tool `webSearchPrime`; the server actually registers `web_search_prime`. Same key and env aliases as `glm` (`ZAI_API_KEY` or `glm-coding.apiKey`).
+
 ## 5.10.11 - 2026-10-25
 
 - Three new search engines for the China market. `minimax` calls MiniMax's model-free search endpoint (`/v1/coding_plan/search`, the one the official MiniMax MCP server calls) and returns raw hits with no model in the loop, so it answers in about a second. `minimax-websearch` calls MiniMax's server-side `web_search` tool and returns the model's answer plus the search results behind it. `glm` calls Zhipu's Web Search API, a pure retrieval service that returns structured results with no model call. All three are keyed, all three search only, and all three sit at the end of the search chain: each call spends money or plan quota, so the free engines get the first attempt and these answer only when the earlier ones are missing or spent. Pin one with `engine` to put it first without giving up the fallback, or leave it in the chain as a paid fallback.

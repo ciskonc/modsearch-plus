@@ -10,11 +10,11 @@ Three jobs, called roles. Each role has engines that can do it:
 
 | Job | Engines | Configurable? |
 | :-- | :-- | :-- |
-| search the public web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa`, `minimax`, `glm`, `minimax-websearch` | preferred engine plus per-engine participation |
+| search the public web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa`, `minimax`, `glm-coding`, `glm`, `minimax-websearch` | preferred engine plus per-engine participation |
 | read one URL | the preferred engine if it can fetch, then `firecrawl`, `antigravity-cli`, `local` | per-engine participation |
 | search X (Twitter) | `grok-cli` | per-engine participation |
 
-The search order is fixed at `firecrawl` then `keenable` then `antigravity-cli` then `tavily` then `exa` then `minimax` then `glm` then `minimax-websearch`, and fetch is `firecrawl` then `antigravity-cli` then `local`. Every engine participates by default. `engines.<name>.enabled: false` filters one out, availability filters what remains, and quota cooldown reorders the ready chain (see below). Firecrawl leads both chains because its keyless tier works on a bare machine, no signup, no key. Keenable comes second in search for the same reason, so a bare machine still has a keyless fallback when Firecrawl's allowance runs out. The China-market engines come last on purpose: each of their calls spends money or plan quota, so the free engines get the first attempt and these answer only when the earlier ones are missing or spent. Pinning one with `engine` puts it first without giving up the fallback.
+The search order is fixed at `firecrawl` then `keenable` then `antigravity-cli` then `tavily` then `exa` then `minimax` then `glm-coding` then `glm` then `minimax-websearch`, and fetch is `firecrawl` then `antigravity-cli` then `local`. Every engine participates by default. `engines.<name>.enabled: false` filters one out, availability filters what remains, and quota cooldown reorders the ready chain (see below). Firecrawl leads both chains because its keyless tier works on a bare machine, no signup, no key. Keenable comes second in search for the same reason, so a bare machine still has a keyless fallback when Firecrawl's allowance runs out. The China-market engines come last on purpose: each of their calls spends money or plan quota, so the free engines get the first attempt and these answer only when the earlier ones are missing or spent. Pinning one with `engine` puts it first without giving up the fallback.
 
 Two facts follow from this table, and they answer most questions:
 
@@ -70,13 +70,13 @@ JSON has no comments, so here is every field:
 
 | Field | Type | Applies to | Meaning |
 | :-- | :-- | :-- | :-- |
-| `engine` | string | top level | Which engine searches. Empty means automatic (the best available here). One of `antigravity-cli`, `tavily`, `exa`, `firecrawl`, `keenable`, `minimax`, `minimax-websearch`, `glm`. The aliases `agy`, `antigravity`, `grok`, `http`, `direct`, `zhipu`, `bigmodel`, `minimax-search` are accepted and normalized to the canonical name. |
+| `engine` | string | top level | Which engine searches. Empty means automatic (the best available here). One of `antigravity-cli`, `tavily`, `exa`, `firecrawl`, `keenable`, `minimax`, `minimax-websearch`, `glm-coding`, `glm`. The aliases `agy`, `antigravity`, `grok`, `http`, `direct`, `zhipu`, `bigmodel`, `minimax-search` are accepted and normalized to the canonical name. |
 | `cooldown` | `"on"` / `"off"` | top level | Quota cooldown failover. On by default. Off reads and writes no state and routes exactly as before. |
 | `allowPrivateNetwork` | boolean | top level | Allow the local fetcher to reach private or reserved addresses, including other VPN ranges and hosts-file accelerators. Default `false`. DNS answers in `198.18.0.0/15` already pass as fake-IP placeholders without this switch. Literal URLs in that range stay blocked while it is off. This setting never authorizes Firecrawl cloud disclosure. Literal private and reserved targets always stay off the cloud. For DNS answers, Firecrawl withholds the URL only when every address is private or reserved after the fake-IP exemption. |
 | `engines` | object | top level | Per-engine settings, keyed by canonical engine name. |
 | `engines.<name>.enabled` | boolean | every engine | Whether automatic routing may use this engine. Missing means enabled. Set `false` to exclude it. Setting `true` removes the override and returns to the built-in default. An explicit `--engine` still forces that engine for one run. |
-| `engines.<name>.apiKey` | string | `tavily`, `exa`, `firecrawl`, `keenable`, `minimax`, `minimax-websearch`, `glm` | One API key, or multiple keys separated by commas. Whitespace and empty comma items are ignored. Authentication, rate-limit, and quota failures rotate through the keys in order. Network, 5xx, and parsing failures go directly to the next engine. Also settable via `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY` / `MINIMAX_API_KEY` / `ZAI_API_KEY`, which win over the file. |
-| `engines.<name>.baseURL` | string | `tavily`, `exa`, `firecrawl`, `keenable`, `minimax`, `minimax-websearch`, `glm` | Endpoint base replacing the official host: a compatible third-party gateway, a proxy, a self-hosted deployment. Must be a full http(s) URL. Also settable via `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL` / `MINIMAX_BASE_URL` / `ZAI_BASE_URL`. Empty unsets it. See the endpoint section below. |
+| `engines.<name>.apiKey` | string | `tavily`, `exa`, `firecrawl`, `keenable`, `minimax`, `minimax-websearch`, `glm-coding`, `glm` | One API key, or multiple keys separated by commas. Whitespace and empty comma items are ignored. Authentication, rate-limit, and quota failures rotate through the keys in order. Network, 5xx, and parsing failures go directly to the next engine. Also settable via `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY` / `MINIMAX_API_KEY` / `ZAI_API_KEY`, which win over the file. |
+| `engines.<name>.baseURL` | string | `tavily`, `exa`, `firecrawl`, `keenable`, `minimax`, `minimax-websearch`, `glm-coding`, `glm` | Endpoint base replacing the official host: a compatible third-party gateway, a proxy, a self-hosted deployment. Must be a full http(s) URL. Also settable via `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL` / `MINIMAX_BASE_URL` / `ZAI_BASE_URL`. Empty unsets it. See the endpoint section below. |
 | `engines.firecrawl.keylessFetch` | boolean | `firecrawl` | Allow public-page fetch through Firecrawl without a key. Default `true` (keyless fetch is on as installed). Set `false` to keep automatic page fetch off Firecrawl's cloud; a configured key or an explicit Firecrawl engine choice still enables it. |
 | `engines.<name>.bin` | string | `antigravity-cli`, `grok-cli` | Path to the engine's CLI binary. Defaults to `agy` and `grok` found on `PATH`. |
 | `engines.<name>.model` | string | `antigravity-cli`, `minimax-websearch`, `glm` | Model the engine uses. `antigravity-cli` defaults to `gemini-3.6-flash-low`. `minimax-websearch` defaults to `MiniMax-M3.1-Flash`, the model MiniMax documents for its server-side web_search tool. `glm` reads it as the search engine code: `search_std` (0.01 CNY a call), `search_pro` (0.03), `search_pro_sogou` and `search_pro_quark` (0.05 each). |
@@ -164,6 +164,17 @@ modsearch config set keenable.apiKey <key>
 ```
 
 Keenable searches only, so `-u` with `-e keenable` is an error. Like Exa, it returns ranked links with snippets (and a publish date when Keenable has one) but writes no synthesis, so its summary is mechanical, a warning says so, and the evidence is in `items`.
+
+### glm-coding (search, Zhipu coding-plan exclusive MCP)
+
+Zhipu's coding plan includes a search entitlement, but on its own endpoint: the plan-exclusive remote MCP server `/api/mcp/web_search_prime/mcp`, whose `web_search_prime` tool draws down **plan credits** instead of the account balance. A plan key that the Web Search REST API rejects with 429 (code 1113) searches fine here — which is why this engine exists beside `glm`.
+
+```bash
+modsearch config set glm-coding.apiKey <key>
+# or environment: export ZAI_API_KEY=<key>
+```
+
+The engine runs the MCP handshake (initialize, then tools/call, carrying the session id) per search. Fields come back as title, link, content and refer. Note the official docs name the tool `webSearchPrime`; the server actually registers `web_search_prime`. It sits ahead of `glm` in the chain: plan credits before account balance.
 
 ### minimax (search, model-free, MiniMax key)
 
