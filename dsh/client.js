@@ -29,6 +29,7 @@ window.__ModuleLoader__.load({
       'keenable',
       'minimax',
       'minimax-websearch',
+      'glm-coding',
       'glm',
       'grok-cli',
       'local',

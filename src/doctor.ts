@@ -289,11 +289,11 @@ function diagnoseEngine(
     };
   }
 
-  if (engine.name === 'glm') {
+  if (engine.name === 'glm' || engine.name === 'glm-coding') {
     const { count, source: keySource } = configuredApiKeysFrom(
       ['ZAI_API_KEY', 'ZHIPUAI_API_KEY', 'ZAI_CODING_CN_API_KEY', 'BIGMODEL_API_KEY'],
       env,
-      config.engines?.glm?.apiKey,
+      config.engines?.[engine.name]?.apiKey,
     );
     const ready = count > 0;
     return {
@@ -301,10 +301,15 @@ function diagnoseEngine(
       enabled,
       ready,
       keySource,
-      reason: keySource
-        ? `${apiKeyPresentReason(count, keySource)}. The Web Search API is billed per call against the account balance, so an unfunded account answers 429 (code 1113).`
-        : 'no API key (not in ZAI_API_KEY or the config file)',
-      ...(ready ? {} : { fix: 'modsearch config set glm.apiKey <key>' }),
+      reason:
+        engine.name === 'glm'
+          ? keySource
+            ? `${apiKeyPresentReason(count, keySource)}. The Web Search API is billed per call against the account balance, so an unfunded account answers 429 (code 1113).`
+            : 'no API key (not in ZAI_API_KEY or the config file)'
+          : keySource
+            ? `${apiKeyPresentReason(count, keySource)}. Searches through the coding-plan exclusive MCP and draws down plan credits, not the account balance.`
+            : 'no API key (not in ZAI_API_KEY or the config file)',
+      ...(ready ? {} : { fix: `modsearch config set ${engine.name}.apiKey <key>` }),
     };
   }
 

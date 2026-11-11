@@ -617,6 +617,7 @@ const CARD_ENGINES = [
   'keenable',
   'minimax',
   'minimax-websearch',
+  'glm-coding',
   'glm',
   'grok-cli',
   'local',
@@ -629,6 +630,7 @@ const KEYED_ENGINES = [
   'keenable',
   'minimax',
   'minimax-websearch',
+  'glm-coding',
   'glm',
 ];
 /**
@@ -652,6 +654,7 @@ const ENGINE_ALIASES = {
   direct: 'local',
   zhipu: 'glm',
   bigmodel: 'glm',
+  'glm-plan': 'glm-coding',
   'minimax-search': 'minimax',
 };
 /**
@@ -665,6 +668,7 @@ const ENGINE_ENV_BINDINGS = {
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
   glm: { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
+  'glm-coding': { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
   minimax: { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
   'minimax-websearch': { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
 };

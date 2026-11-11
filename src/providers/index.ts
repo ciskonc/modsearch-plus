@@ -2,6 +2,7 @@ import type { EngineSettings, Role } from '../config.ts';
 import { antigravityCliProvider } from './antigravity.ts';
 import { exaProvider } from './exa.ts';
 import { firecrawlProvider } from './firecrawl.ts';
+import { glmCodingProvider } from './glm-coding.ts';
 import { glmProvider } from './glm.ts';
 import { grokCliProvider } from './grok.ts';
 import { httpFetchProvider } from './httpFetch.ts';
@@ -92,6 +93,7 @@ const ENGINES: Record<string, SearchEngine> = {
   minimax: minimaxProvider,
   'minimax-websearch': minimaxWebSearchProvider,
   glm: glmProvider,
+  'glm-coding': glmCodingProvider,
   'grok-cli': grokCliProvider,
   grok: grokCliProvider,
   // The built-in direct fetcher, canonically `local`. `http` and `direct` stay
@@ -124,6 +126,7 @@ export const ROLE_PREFERENCE: Record<Role, string[]> = {
     'tavily',
     'exa',
     'minimax',
+    'glm-coding',
     'glm',
     'minimax-websearch',
   ],
