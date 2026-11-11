@@ -117,11 +117,12 @@ const SUMMARY = {
     keenable: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     minimax: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     'minimax-websearch': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
+    'glm-coding': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     glm: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     'grok-cli': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     local: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
   },
-  keyed: ['tavily', 'exa', 'firecrawl', 'keenable', 'minimax', 'minimax-websearch', 'glm'],
+  keyed: ['tavily', 'exa', 'firecrawl', 'keenable', 'minimax', 'minimax-websearch', 'glm-coding', 'glm'],
   models: ['antigravity-cli', 'minimax-websearch', 'glm'],
 };
 
@@ -366,6 +367,7 @@ describe('a save carries only what the save is about', () => {
         keenable: true,
         minimax: true,
         'minimax-websearch': true,
+        'glm-coding': true,
         glm: true,
         'grok-cli': true,
         local: true,
@@ -632,6 +634,7 @@ const CHAIN_ENGINES_ORDER = [
   'keenable',
   'minimax',
   'minimax-websearch',
+  'glm-coding',
   'glm',
   'grok-cli',
 ];
@@ -756,6 +759,7 @@ describe('the automatic engine chain lists what this machine can actually search
       'keenable',
       'minimax',
       'minimax-websearch',
+      'glm-coding',
       'glm',
       'grok-cli',
     ]);
@@ -931,6 +935,7 @@ describe('the preference list offers only engines a preference can mean', () => 
       'keenable',
       'minimax',
       'minimax-websearch',
+      'glm-coding',
       'glm',
       'grok-cli',
     ]);
