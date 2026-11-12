@@ -42,8 +42,8 @@ Nothing else needs setting up first: modsearch works with no config file. Web se
 Some harnesses forbid running scripts. Reason through the same order by hand and run the first line that works (the pinned version is 5.10.13):
 
 1. A `modsearch` on `PATH` whose major version is 5 and is at least 5.10.13: `modsearch <args>`.
-2. Otherwise, if `npx` exists: `npx --yes --package @ciskonc/modsearch@5.10.13 modsearch <args>`.
-3. Otherwise, if `bunx` exists: `bunx --bun @ciskonc/modsearch@5.10.13 <args>`.
+2. Otherwise, if `npx` exists: `npx --yes --package modsearch-plus@5.10.13 modsearch <args>`.
+3. Otherwise, if `bunx` exists: `bunx --bun modsearch-plus@5.10.13 <args>`.
 
 4. Otherwise none of these runtimes is here. Tell the user no JavaScript runtime was found and that installing Node 22.13+ (https://nodejs.org) or Bun (https://bun.sh) is the next step. Do not claim modsearch itself failed.
 

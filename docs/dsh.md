@@ -29,14 +29,14 @@ npx -y @deepseek-ai/dsh --version
 npx -y @deepseek-ai/dsh --profile web --dump-config
 ```
 
-The dump should contain both `searchProvider: modsearch` and a plugin row named `@ciskonc/modsearch`.
+The dump should contain both `searchProvider: modsearch` and a plugin row named `modsearch-plus`.
 
 ## Install
 
 Install into the profile you actually start. `web` is the normal browser UI profile:
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile web add @ciskonc/modsearch@5.10.13
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.13
 ```
 
 Restart dsh after installation, then confirm the resolved package:
@@ -47,7 +47,7 @@ npx -y @deepseek-ai/dsh plugin --profile web list --depth 0
 
 The exact version is intentional. pnpm 11 can hold back very recent releases through `minimumReleaseAge`, which can make `@latest` resolve to an older package. The release process keeps the version in this command synchronized with `package.json`.
 
-The desktop app's `desktop` profile is installed only from its own window: the dsh CLI rejects it with `profile "desktop" is managed exclusively by the Electron application`. In the **Add plugin** dialog, enter the package name `@ciskonc/modsearch`, not the GitHub repository URL. Only the npm package ships the built CLI. A GitHub install brings source only, and pnpm blocks the build step that would fill in the gap.
+The desktop app's `desktop` profile is installed only from its own window: the dsh CLI rejects it with `profile "desktop" is managed exclusively by the Electron application`. In the **Add plugin** dialog, enter the package name `modsearch-plus`, not the GitHub repository URL. Only the npm package ships the built CLI. A GitHub install brings source only, and pnpm blocks the build step that would fill in the gap.
 
 ## What the bundle changes
 
@@ -71,7 +71,7 @@ The dsh plugin does not keep a second engine config. It inherits the same enviro
 Start with the offline health check:
 
 ```sh
-npx -y @ciskonc/modsearch@5.10.13 doctor
+npx -y modsearch-plus@5.10.13 doctor
 ```
 
 Common settings:
@@ -92,7 +92,7 @@ See the [full engine configuration reference](../skills/modsearch/references/con
 
 ## Configure from the web UI
 
-The dsh web UI has no terminal, so the plugin brings its own settings card. On dsh 0.1.6-alpha.2 and later it sits on the plugin's page: open **Plugins** in the sidebar and pick `@ciskonc/modsearch`. Earlier dsh releases show it as a **Search engine (ModSearch)** card under Settings → Plugins → Plugin config. Either way it edits the same `~/.modsearch/config.json` as the CLI, through a route the plugin registers at `/modsearch/config`. That file belongs to your user account, not to a dsh profile, so every dsh profile on this machine and the CLI share one set of engine settings.
+The dsh web UI has no terminal, so the plugin brings its own settings card. On dsh 0.1.6-alpha.2 and later it sits on the plugin's page: open **Plugins** in the sidebar and pick `modsearch-plus`. Earlier dsh releases show it as a **Search engine (ModSearch)** card under Settings → Plugins → Plugin config. Either way it edits the same `~/.modsearch/config.json` as the CLI, through a route the plugin registers at `/modsearch/config`. That file belongs to your user account, not to a dsh profile, so every dsh profile on this machine and the CLI share one set of engine settings.
 
 The card holds three things:
 
@@ -177,13 +177,13 @@ The first call should use dsh's native `web_search` card. The other two should a
 Refresh the recorded request with the exact current version:
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile <name> add @ciskonc/modsearch@5.10.13
+npx -y @deepseek-ai/dsh plugin --profile <name> add modsearch-plus@5.10.13
 ```
 
 Remove it with:
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile <name> remove @ciskonc/modsearch
+npx -y @deepseek-ai/dsh plugin --profile <name> remove modsearch-plus
 ```
 
 If a user patch still names `searchProvider: modsearch`, change or remove that override after uninstalling.
@@ -191,7 +191,7 @@ If a user patch still names `searchProvider: modsearch`, change or remove that o
 ## Troubleshooting
 
 - `declares no dsh.bundle`: an older ModSearch release landed. Reinstall the exact version shown above.
-- `modsearch's CLI build is missing`, or `Cannot find module .../dist/main.js` on 5.10.6 and older: the plugin was installed from the GitHub repository, which ships no build. Remove it and add it again by package name, `@ciskonc/modsearch`.
+- `modsearch's CLI build is missing`, or `Cannot find module .../dist/main.js` on 5.10.6 and older: the plugin was installed from the GitHub repository, which ships no build. Remove it and add it again by package name, `modsearch-plus`.
 - `web seam has no registerSearchProvider`: dsh moved a developer-preview interface. `x_search` and `read_page` still register, while web search is skipped with a visible log message. Check the latest dsh release before changing the plugin.
 - `modsearch failed (exit ...)`: run `modsearch doctor`. The error includes the engine attempts made by the CLI.
 - The package appears in `plugin list` but not `--dump-config`: verify it appears in `dsh.profile.bundles` inside `~/.dsh/profiles/<name>/package.json`.

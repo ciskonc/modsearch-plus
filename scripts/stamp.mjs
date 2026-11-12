@@ -18,9 +18,9 @@ export function readPackageVersion(root = repoRoot) {
   return readPackage(root).version;
 }
 
-/** The skill directory name, derived from the scoped package name. */
+/** The skill directory name, fixed to the dsh bundle id — not the package name, which is now scopeless (`modsearch-plus`). */
 export function skillName(root = repoRoot) {
-  return readPackage(root).name.split('/').pop();
+  return 'modsearch';
 }
 
 /**
@@ -119,7 +119,7 @@ export function dshInstallTargets(root, pkgName) {
 }
 
 function allStampTargets(root, pkg) {
-  const base = join(root, 'skills', pkg.name.split('/').pop());
+  const base = join(root, 'skills', skillName(root));
   return [...stampTargets(base, pkg.name), ...dshInstallTargets(root, pkg.name)];
 }
 

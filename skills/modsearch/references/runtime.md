@@ -11,7 +11,7 @@ shell syntax.
 ## Pinned version
 
 - Pinned CLI version: 5.10.13
-- npm package: `@ciskonc/modsearch`
+- npm package: `modsearch-plus`
 - CLI binary name: `modsearch`
 
 The pinned version line above and the constants inside both launchers are
@@ -24,8 +24,8 @@ launcher/reference copies ever drift from `package.json`.
 Each call resolves a way to run the CLI, in this order:
 
 1. **A compatible `modsearch` already on `PATH`** — run it directly, by name.
-2. **`npx` present, and `node` meets the CLI's 22.13 floor** — `npx --yes --package @ciskonc/modsearch@<pinned> modsearch <args>`. An npx sitting on an older node is skipped: it would select a path known to fail at run time.
-3. **`bunx` present** — `bunx --bun @ciskonc/modsearch@<pinned> <args>`.
+2. **`npx` present, and `node` meets the CLI's 22.13 floor** — `npx --yes --package modsearch-plus@<pinned> modsearch <args>`. An npx sitting on an older node is skipped: it would select a path known to fail at run time.
+3. **`bunx` present** — `bunx --bun modsearch-plus@<pinned> <args>`.
 4. **A native artifact** — reserved for phase B. None is published yet, so this
    branch reports `nativeArtifact.available: false` and moves on.
 5. **Nothing usable** — print a structured diagnosis and exit `78` (`EX_CONFIG`).

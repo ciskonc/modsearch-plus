@@ -14,7 +14,7 @@
 // imports from dsh client packages: the same zero-dependency stance as the
 // host half.
 window.__ModuleLoader__.load({
-  id: '@ciskonc/modsearch',
+  id: 'modsearch-plus',
   factory: (require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
     var CHAIN_ENGINES = ENGINES.filter((name) => name !== 'local');
 
     // The Plugins page dispatches a bundle's configuration by npm package name.
-    var PACKAGE_NAME = '@ciskonc/modsearch';
+    var PACKAGE_NAME = 'modsearch-plus';
 
     // Two short label sets rather than a locale bundle: the card has a couple
     // of dozen strings, and a bundle would be more machinery than the thing it
