@@ -1,167 +1,136 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/liustack/modsearch/main/assets/banner.jpg" width="100%" alt="ModSearch" />
-</p>
+<div align="center">
 
-<h1 align="center">ModSearch</h1>
+<img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/banner.jpg" alt="modsearch-plus" width="720">
 
-<p align="center"><b>在官方 App 里模型能联网，切到 API 就不能了。ModSearch 把联网补回来：网页搜索、X 搜索、单页抓取。免费，免注册，免 API key。</b></p>
+# modsearch-plus
 
-<p align="center">🥇 <b>全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件</b> 🥇</p>
+**为模型没有网页搜索能力的聊天应用补上 web 搜索、X 搜索与网页抓取——免费起步，无需注册，无需 API key。**
 
-<p align="center">引擎：<b>Firecrawl</b>（免注册，默认）· <b>Keenable</b>（免注册）· <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>MiniMax</b> · <b>智谱 GLM</b> · <b>Grok（X）</b> · <b>local</b>，自动故障转移</p>
+引擎以链式运行并自动故障转移：keyless 引擎默认在位，有 key 引擎在配额与预算允许时接管。
 
 <p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="docs/troubleshooting.zh-CN.md">故障排查</a> ·
-  <a href="skills/modsearch/references/configure.zh-CN.md">配置</a> ·
-  <a href="skills/modsearch/references/output-schema.zh-CN.md">输出契约</a> ·
-  <a href="docs/security.zh-CN.md">安全</a> ·
-  <a href="https://github.com/liustack/modlens">ModLens（视觉）</a>
+  <a href="LICENSE"><img alt="GitHub license" src="https://img.shields.io/github/license/ciskonc/modsearch-plus"></a>
+  <a href="https://github.com/ciskonc/modsearch-plus"><img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/ciskonc/modsearch-plus"></a>
+  <a href="https://github.com/ciskonc/modsearch-plus/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/ciskonc/modsearch-plus"></a>
+  <a href="https://github.com/ciskonc/modsearch-plus/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/ciskonc/modsearch-plus"></a>
+  <a href="https://www.npmjs.com/package/modsearch-plus"><img alt="npm version" src="https://img.shields.io/npm/v/modsearch-plus"></a>
 </p>
+
+[English](README.md) | 中文
+
+</div>
+
+---
+
+## 简介
+
+modsearch-plus 是面向聊天应用的网页搜索插件：为模型补上 web 搜索、X 搜索与网页抓取三项能力，背后是一条自动故障转移的引擎链，免费起步、无注册、无 API key。本仓库是 [liustack/modsearch](https://github.com/liustack/modsearch) 的 fork，基于上游 v5.10.10 并合入上游 5.10.11 与 5.10.12 的变更，在引擎链上扩展出 MiniMax 与 GLM（智谱）原生搜索引擎。
+
+模型手里没有搜索结果时，只能拿训练数据里的东西来答。训练截止之后发布的消息和此刻还在变的网页它都够不着，遇到没学过的话题就更没辙。碰上这种情况，它要么凭记忆硬答，要么承认不知道。
+
+引擎链接上之后，搜索能力直接挂进聊天本身：遇到需要联网的问题，模型在对话中即时搜索。
+
+## 截图
+
+DeepSeek Harness 网页端的设置卡片：选首选引擎、填 API key、配置自托管端点、勾选参与故障转移的引擎。
+
+<p align="center"><img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/demo-dsh-settings-card.jpg" alt="设置卡片" width="720"></p>
+
+模型视角的搜索与取页效果：
 
 <p align="center">
-  <a href="https://x.com/liustack"><img src="https://img.shields.io/badge/follow-%40liustack-black?style=flat-square&logo=x&logoColor=white" alt="Follow @liustack on X"></a>
-  <a href="https://www.npmjs.com/package/modsearch-plus"><img src="https://img.shields.io/npm/v/modsearch-plus?style=flat-square&label=npm&color=cb3837" alt="npm"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/modsearch-plus?style=flat-square" alt="Node.js"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/Not%20backed%20by-Y%20Combinator-FF6600?style=flat-square&logo=ycombinator&logoColor=white" alt="Not backed by Y Combinator">
-  <img src="https://img.shields.io/badge/users-unknown-lightgrey?style=flat-square" alt="Users unknown">
+  <img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/demo-dsh-web-search.png" alt="DeepSeek Harness 中的 web 搜索" width="420">
+  <img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/demo-codex-search.png" alt="Codex 中的搜索" width="420">
 </p>
 
-DeepSeek 和 GLM 等模型没有联网能力或联网能力羸弱。ModSearch 通过外挂方式大幅增强模型联网搜索、X 搜索、单页抓取能力。装完即用：默认引擎是 Firecrawl 的免注册通道，[每月 1,000 免费 credits](https://www.firecrawl.dev/blog/firecrawl-keyless-launch)，不用注册账号，不用 API key，不用绑卡。
+## 引擎
 
-## 交流
+引擎按链式运行并自动故障转移：某个引擎被限流、配额耗尽或鉴权失败时，下一个引擎接管请求。Firecrawl 是 keyless 默认引擎，因此不做任何配置搜索也能工作。
 
-用出问题了就[提个 issue](https://github.com/liustack/modsearch/issues/new/choose)。其他的都欢迎来 X 上聊：**[@liustack](https://x.com/liustack)**，你用它做了什么、在哪个 harness 上跑、接下来该做什么，新版本也是那边先发。社群正在筹备中。
+| 引擎 | 能力 | 免费额度 | 启用方式 |
+|---|---|---|---|
+| Firecrawl | Web 搜索 + 网页抓取 | 每月 1000 免费 credits | 默认启用，keyless |
+| Keenable | Web 搜索 | 1000 请求/小时/IP | Keyless |
+| You.com | Web 搜索 | 100 次/天/IP | Keyless |
+| Antigravity CLI | Web 搜索 + 网页抓取 | 免费 | 安装 CLI 并登录 |
+| Tavily | Web 搜索 | 每月 1000 credits | API key |
+| Exa | Web 搜索 | 每月 $10 额度（约 1400 次搜索，无需绑卡） | API key |
+| MiniMax | Web 搜索 | M Plan 订阅密钥 | API key |
+| GLM coding plan | Web 搜索（MCP） | 套餐内含 | API key |
+| GLM | Web 搜索（REST） | 按次付费，0.01 元/次 | API key（余额计费） |
+| MiniMax websearch | Web 搜索 | 按次付费，0.03 元/次 | API key |
+| Grok Build | X（Twitter）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 Grok Build 并登录 |
+| local | 网页抓取 | 免费 | 无需配置 |
 
-## 特性
-
-- **🥇 全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件：** 一条命令即刻安装 `npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.15`。桌面版「添加插件」里填 `modsearch-plus`，不要填 GitHub 地址。细节见[接入指南](docs/harness-setup.zh-CN.md#deepseek-harness-dsh)。
-- **开箱免费，免注册。** 搜索和单页抓取默认跑在 Firecrawl 免注册通道上：[每月 1,000 免费 credits](https://www.firecrawl.dev/blog/firecrawl-keyless-launch)，没有账号、没有 API key、没有绑卡。后备通道也全部免费：Antigravity CLI 只需浏览器登录，Tavily、Exa 和免费的 Firecrawl key 各带独立的月度额度，均不要求绑卡。
-- **自动故障转移。** 一个通道失败或额度耗尽时自动切换下一个。
-- **单引擎多密钥轮换。** Tavily、Exa、Firecrawl、Keenable、MiniMax、智谱都可配置逗号分隔的多个密钥。鉴权、限流或配额失败时先轮换到下一个密钥，再按引擎链故障转移。
-- **可搜索 X（推特）。** 安装 Grok Build 后，可检索网页索引覆盖不到的 X 内容。
-- **一次安装，多端可用。** 支持 Claude Code、Codex、Pi、OpenCode。
-
-## 实测
-
-四张截图全部原样记录，前两张来自 Codex 桌面 App，后两张来自 dsh web，驱动的都是自身不能联网的 DeepSeek 模型。
-
-给出一个博客链接，询问文章内容。25 秒后返回全文的结构化摘要，全程未打开浏览器。
-
-![不能联网的 DeepSeek 通过 ModSearch 总结博客链接](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-codex-fetch.png)
-
-不指定目标，只问「今天有什么有趣的 AI 新闻」。36 秒后返回六条带来源的结果，并在结尾说明哪些信息来自检索聚合、细节可能有出入。该提醒来自 `uncertainty` 字段。
-
-![开放问题返回六条带来源的结果，并附可信度说明](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-codex-search.png)
-
-在 dsh web 里问今天有哪些重要的 AI 新闻。dsh 原生的搜索工具行直接跑在 modsearch 引擎链上，18 秒返回三条当日消息，每条带来源链接。
-
-![dsh web 的原生搜索跑在 modsearch 引擎链上，返回三条带来源的当日新闻](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-web-search.zh-CN.png)
-
-问 Node.js 现在哪条版本线还在维护。`read_page` 先后读官网版本页和发布计划表，59 秒给出结论和版本状态表，来源附在结尾。
-
-![read_page 读取两个页面后给出 Node.js 维护线结论](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-web-fetch.zh-CN.png)
-
-## 支持的引擎
-
-Firecrawl 和 Keenable 零配置直接可用，其余引擎各一条命令。key 存在 `~/.modsearch/config.json`（0600 权限，展示时打码）：
-
-| 引擎 | 能做什么 | 免费额度 | 怎么开 |
-| :-- | :-- | :-- | :-- |
-| Firecrawl（默认） | 网页搜索 + 单页抓取 | 免注册每月 1,000 免费 credits。注册免费 key 再得独享的每月 1,000 | 无需任何操作，装完即用 |
-| Keenable | 网页搜索 | 免注册每小时 1,000 次（按 IP 计，同一 IP 上所有人共用）。注册免费 key 得独享的每月 100,000 次 | 无需任何操作，装完即用 |
-| You.com | 网页搜索 | 免注册每 IP 每天限 100 次（同 IP 所有人共享） | 无需任何操作，装完即用 |
-| Antigravity CLI | 网页搜索 + 单页抓取 | 免费，浏览器登录 | 安装 `agy` 并登录 |
-| Tavily | 网页搜索 | 每月 1,000 credits，不绑卡 | `modsearch config set tavily.apiKey <key>` |
-| Exa | 网页搜索 | 每月 $10 循环额度（约 1,400 次），不绑卡 | `modsearch config set exa.apiKey <key>` |
-| MiniMax | 网页搜索 | M Plan 订阅 key，免模型搜索端点，不消耗模型调用 | `modsearch config set minimax.apiKey <key>` |
-| MiniMax web_search | 网页搜索 + 成文答案 | 跑一次模型调用，用 MiniMax 服务端 web_search 工具（每次 0.03 元） | `modsearch config set minimax-websearch.apiKey <key>` |
-| 智谱 GLM（编程套餐） | 网页搜索 | 套餐自带：走套餐专属 MCP，扣套餐积分 | `modsearch config set glm-coding.apiKey <key>` |
-| 智谱 GLM | 网页搜索 | Web Search API，按次计费（`search_std` 每次 0.01 元） | `modsearch config set glm.apiKey <key>` |
-| Grok Build | X（推特）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 `grok` 并登录 |
-| local | 单页抓取 | 内置，零安装 | 无需任何操作 |
-
-key 也可以走环境变量（`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API_KEY`、`KEENABLE_API_KEY`、`MINIMAX_API_KEY`、`ZAI_API_KEY`）。同一引擎可在配置文件或环境变量中写入逗号分隔的多个 key，例如 `key-one,key-two`。配了多个引擎就自动故障转移，好的优先。每个引擎默认都参与，可以用 `modsearch config set tavily.enabled false` 排除一个。想用 Tavily、Exa、Firecrawl、Keenable、MiniMax、智谱兼容的第三方或自建端点？把引擎指过去即可：`modsearch config set tavily.baseURL <url>`。官方地址始终内置在代码里，不会作为默认配置写入文件。每个引擎的全部配置项见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
+Tavily、Exa、Firecrawl、Keenable、MiniMax、MiniMax websearch、Zhipu（智谱）支持逗号分隔多 key，在鉴权失败、限流或配额耗尽时自动轮换。密钥保存在 `~/.modsearch/config.json`（权限 0600）或环境变量（如 `TAVILY_API_KEY`）。自托管端点按引擎设置，例如 `modsearch config set tavily.baseURL <url>`。
 
 ## 安装
 
-**第一步，交给你的 AI。** skill 一装好，搜索和单页抓取就跑在 Firecrawl 的免注册免费额度上，所以安装只是一句话：
+<details>
+<summary>DeepSeek Harness（推荐）</summary>
 
-> 按 https://github.com/liustack/modsearch 的 INSTALL.md 安装并配置 modsearch skill，完成后运行体检并把结果告诉我。
+```sh
+dsh plugin --profile web add modsearch-plus
+```
 
-DeepSeek Harness (dsh) 里发同一句话即可。INSTALL.md 会认出 dsh，改走原生插件而不是 skill，让 dsh 自带的 `web_search` 直接跑在 modsearch 上。浏览器版由 AI 直接装好。桌面版只接受从自己窗口里装插件，AI 会请你打开「插件」，点「添加插件」，填 `modsearch-plus`。
+桌面应用在 Add plugin 对话框中输入 `modsearch-plus`。0.1.6-alpha.2 之前的 dsh 版本，设置卡片位于 Settings → Plugins → Plugin config。
 
-也可以直接通过 [skills.sh](https://skills.sh/) 安装同一个 skill：
+</details>
 
-```bash
+<details>
+<summary>其他宿主</summary>
+
+Claude Code、Codex、Pi、OpenCode 以 skill 方式安装，skill 本身来自上游项目：
+
+```sh
 npx skills add liustack/modsearch
 ```
 
-**第二步（可选），再加免费引擎。** Antigravity CLI 的综述质量更高，Tavily、Exa 或免费 Firecrawl key 能在免注册额度之上再加一份个人额度，都不要求绑卡。只有 agy 的浏览器登录需要你亲手完成：
+</details>
 
-```bash
-curl -fsSL https://antigravity.google/cli/install.sh | bash
-agy                                                           # 浏览器完成登录后退出
+<details>
+<summary>从源码构建</summary>
+
+```sh
+git clone https://github.com/ciskonc/modsearch-plus.git
 ```
 
-选了 key 的话，发一句话给 AI 即可：「把我的 tavily key 设成 tvly-...」。
+</details>
 
-dsh 用户还有一条不碰命令行的路。在 dsh 侧栏点开「插件」，进入 `modsearch-plus`：选首选引擎、填 API 密钥和自建接口地址、勾选哪些引擎参与故障转移，点保存就生效。0.1.6-alpha.2 之前的 dsh 版本里，同一张卡片在设置页的「插件 → 插件配置」里。
+## 使用
 
-![dsh「插件」面板里的 ModSearch 页面：选首选引擎、填 API 密钥与接口地址、勾选参与故障转移的引擎](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-settings-card.jpg)
+没有命令要记。安装完成后搜索能力即在位：问题需要联网时，模型在对话中即时搜索，答案附带来源；聚合性内容带 uncertainty 字段标注可信度。
 
-## 用法
+<details>
+<summary>设置卡片</summary>
 
-装好之后不需要记任何命令。正常聊天，提出需要查证的问题或给出一个链接，skill 自动触发：选引擎、跑搜索或抓取，答案带着来源回来。
+在 DeepSeek Harness 设置卡片中选择首选引擎、填入 API key、配置自托管端点、勾选参与故障转移的引擎。保存即生效；已保存的 key 不会发送到浏览器。
 
-## 文档
+</details>
 
-| 文档                                                     | 适用场景                                    |
-| :------------------------------------------------------- | :------------------------------------------ |
-| [INSTALL.md](INSTALL.md)                                 | 一步步安装 skill（为 agent 编写）           |
-| [CLI 手册](skills/modsearch/references/cli.zh-CN.md)           | skill 所驱动的 CLI：参数、配置与体检        |
-| [故障排查](docs/troubleshooting.zh-CN.md)                      | 命令报错，查成因和解法                      |
-| [配置手册](skills/modsearch/references/configure.zh-CN.md)     | 配置 key、切换引擎、排查配置                |
-| [输出契约](skills/modsearch/references/output-schema.zh-CN.md) | 解析 JSON 或构建下游工具                    |
-| [dsh 插件](docs/dsh.zh-CN.md)                                | 安装、配置、验证与更新原生 dsh bundle       |
-| [宿主接入](docs/harness-setup.zh-CN.md)                        | 在 Codex、Claude Code、OpenCode、Pi 中配置  |
-| [安全说明](docs/security.zh-CN.md)                             | SSRF 防护、DNS 重绑定防护、不可信输入的处理 |
-| [更新日志](CHANGELOG.md)                                 | 查询版本变更                                |
+<details>
+<summary>与 DSH 的集成方式</summary>
 
-Clash、Clash Verge Rev、mihomo、Surge 的代理 fake-ip 模式开箱即用：DNS 返回的 `198.18.0.0/15` 地址会被视为 fake-ip 占位值，不用开任何开关。URL 中直写的 `http://198.18.0.5/` 这类地址在 `allowPrivateNetwork` 关闭时仍会被拦。VPN 用的其它保留段，或 Steam++ / Watt Toolkit 这类 hosts 文件加速器，见[私有网络目标被拦](docs/troubleshooting.zh-CN.md#私有网络目标被拦)。
+引擎链成为 DSH web seam 的 searchProvider——原生 web search 工具跑在 modsearch 上；x_search 与 read_page 注册为 raw tool，模型可直接调用。
 
-## 参与方式
+</details>
 
-本仓库不接受 PR。项目由作者独立维护，所有代码经作者本人审阅，这是它可靠性的前提。两种有效的参与方式：
+## 兼容性
 
-- **[提交 issue](https://github.com/liustack/modsearch/issues)。** bug、建议、难以理解的报错或文档都欢迎。issue 会被认真阅读，并影响后续开发方向。
-- **Fork。** MIT 协议下你的副本完全归你，修改和发布不受限制。
+| 插件版本 | 实测 DSH | 说明 |
+|---|---|---|
+| 5.10.15（2026-11-20） | 0.2.2-rc.5 | 当前版本 |
+| 5.10.14 | 0.2.2-rc.5 | DSH rc.5 设置卡片修复 |
+| 5.10.x | DSH ≥ 0.2.x | 5.10.x 线在 DSH 0.2.x 及以上测试 |
 
-## 插入硬广一条
+非 dsh 宿主（Claude Code、Codex、Pi、OpenCode）以 skill 方式运行 modsearch，不适用 DSH 列。
 
-关注微信公众号「liustack」：AI 工具、实践与想法，第一时间推送。微信扫码，或搜一搜「liustack」：
+## 致谢
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/liustack/modsearch/main/assets/wechat-qrcode.png" width="420" alt="微信公众号 liustack" />
-</p>
+modsearch-plus 是 [liustack/modsearch](https://github.com/liustack/modsearch) 的 fork：引擎链与插件本体来自上游，本 fork 在其上新增 MiniMax 与 GLM（智谱）原生引擎。感谢上游项目。
 
-⭐ 如果它对你有用，请给 [ModSearch](https://github.com/liustack/modsearch) 一个 star，这是其他开发者找到它的方式。
+感谢链上引擎服务提供方：Firecrawl、Keenable、You.com、Antigravity CLI、Tavily、Exa、MiniMax、智谱（GLM）、Grok。
 
-## Star History
+## 许可证
 
-<a href="https://www.star-history.com/?repos=liustack%2Fmodsearch&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=liustack/modsearch&type=date&theme=dark&legend=top-left&sealed_token=ymc92zQxHuDgpexZjaqDbEhMCuCjGHskpQGkzkwwrU0FksWoq5MasrMA64y9G2CxNV9O3EFeRjKneWSDYmHH4HWjpUiaAme0haCp-1Y72cRmHDv8coW35A" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=liustack/modsearch&type=date&legend=top-left&sealed_token=ymc92zQxHuDgpexZjaqDbEhMCuCjGHskpQGkzkwwrU0FksWoq5MasrMA64y9G2CxNV9O3EFeRjKneWSDYmHH4HWjpUiaAme0haCp-1Y72cRmHDv8coW35A" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=liustack/modsearch&type=date&legend=top-left&sealed_token=ymc92zQxHuDgpexZjaqDbEhMCuCjGHskpQGkzkwwrU0FksWoq5MasrMA64y9G2CxNV9O3EFeRjKneWSDYmHH4HWjpUiaAme0haCp-1Y72cRmHDv8coW35A" />
- </picture>
-</a>
-
-## 免责声明
-
-ModSearch 以 MIT 许可发布，使用不受限制。作者不对任何用途（含商业使用）提供保证与背书。上游引擎（Antigravity CLI、Tavily、Exa、Firecrawl、Keenable、MiniMax、智谱 GLM、Grok Build）各有自己的条款与额度，遵守这些约束由使用者负责。
-
-## License
-
-MIT
+MIT。许可信息见[仓库](https://github.com/ciskonc/modsearch-plus)。

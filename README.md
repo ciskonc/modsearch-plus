@@ -1,167 +1,136 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/liustack/modsearch/main/assets/banner.jpg" width="100%" alt="ModSearch" />
-</p>
+<div align="center">
 
-<h1 align="center">ModSearch</h1>
+<img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/banner.jpg" alt="modsearch-plus" width="720">
 
-<p align="center"><b>In the chat app your model can search the web. On the API it cannot. ModSearch puts the web back: web search, X search, page fetch. Free, no signup, no API key.</b></p>
+# modsearch-plus
 
-<p align="center">🥇 <b>The strongest free web search plugin for DeepSeek Harness (dsh)</b> 🥇</p>
+**Web search, X search, and page fetch for chat apps whose models cannot search the web — free, no signup, no API key to start.**
 
-<p align="center">Engines: <b>Firecrawl</b> (keyless, default) · <b>Keenable</b> (keyless) · <b>Antigravity CLI</b> · <b>You.com</b> (keyless) · <b>Tavily</b> · <b>Exa</b> · <b>MiniMax</b> · <b>Zhipu GLM ×2</b> · <b>Grok (X)</b> · <b>local</b>, with automatic failover</p>
+Engines run as a chain with automatic failover: keyless engines are in place by default, keyed engines take over as quota and budget allow.
 
 <p align="center">
-  <a href="./README.zh-CN.md">简体中文</a> ·
-  <a href="docs/troubleshooting.md">Troubleshooting</a> ·
-  <a href="skills/modsearch/references/configure.md">Configuration</a> ·
-  <a href="skills/modsearch/references/output-schema.md">Output contract</a> ·
-  <a href="docs/security.md">Security</a> ·
-  <a href="https://github.com/liustack/modlens">ModLens (vision)</a>
+  <a href="LICENSE"><img alt="GitHub license" src="https://img.shields.io/github/license/ciskonc/modsearch-plus"></a>
+  <a href="https://github.com/ciskonc/modsearch-plus"><img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/ciskonc/modsearch-plus"></a>
+  <a href="https://github.com/ciskonc/modsearch-plus/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/ciskonc/modsearch-plus"></a>
+  <a href="https://github.com/ciskonc/modsearch-plus/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/ciskonc/modsearch-plus"></a>
+  <a href="https://www.npmjs.com/package/modsearch-plus"><img alt="npm version" src="https://img.shields.io/npm/v/modsearch-plus"></a>
 </p>
+
+English | [中文](README.zh-CN.md)
+
+</div>
+
+---
+
+## Introduction
+
+modsearch-plus is a web search plugin for chat applications. It gives the model web search, X search, and page fetch behind a single engine chain that fails over automatically, and it is free to start: no signup, no API key. The repository is a fork of [liustack/modsearch](https://github.com/liustack/modsearch), based on upstream v5.10.10 with the 5.10.11 and 5.10.12 upstream changes merged in, and extends the chain with native MiniMax and GLM (Zhipu) search engines.
+
+A chat model with no search tool can only answer from what its training data holds. News published after its cutoff and pages that are still changing are out of its reach, and topics it was never trained on are more hopeless still. Faced with those, the model guesses or admits it does not know.
+
+Once the engine chain is wired in, search sits behind the chat itself: a question that needs the web triggers a search mid-conversation.
+
+## Screenshot
+
+The settings card in the DeepSeek Harness web app: pick a preferred engine, enter API keys, set a self-hosted endpoint, and tick the engines that join the failover chain.
+
+<p align="center"><img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/demo-dsh-settings-card.jpg" alt="Settings card" width="720"></p>
+
+Search and fetch as the model sees them:
 
 <p align="center">
-  <a href="https://x.com/liustack"><img src="https://img.shields.io/badge/follow-%40liustack-black?style=flat-square&logo=x&logoColor=white" alt="Follow @liustack on X"></a>
-  <a href="https://www.npmjs.com/package/modsearch-plus"><img src="https://img.shields.io/npm/v/modsearch-plus?style=flat-square&label=npm&color=cb3837" alt="npm"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/modsearch-plus?style=flat-square" alt="Node.js"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/Not%20backed%20by-Y%20Combinator-FF6600?style=flat-square&logo=ycombinator&logoColor=white" alt="Not backed by Y Combinator">
-  <img src="https://img.shields.io/badge/users-unknown-lightgrey?style=flat-square" alt="Users unknown">
+  <img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/demo-dsh-web-search.png" alt="Web search in DeepSeek Harness" width="420">
+  <img src="https://raw.githubusercontent.com/ciskonc/modsearch-plus/main/assets/demo-codex-search.png" alt="Search in Codex" width="420">
 </p>
 
-Models like DeepSeek and GLM have no web access, or a weak one. ModSearch is a plug-in that greatly strengthens web search, X search, and single-page fetch. It works the moment it lands: the default engine is Firecrawl's keyless tier, [1,000 free credits every month](https://www.firecrawl.dev/blog/firecrawl-keyless-launch), with no account, no API key, and no card.
+## Engines
 
-## Talk to us
+Engines run as a chain and fail over automatically: when one is rate-limited, out of quota, or fails authentication, the next engine takes the request. Firecrawl is the keyless default, so search works before any configuration.
 
-Hit a problem? [Open an issue](https://github.com/liustack/modsearch/issues/new/choose). Everything else is welcome on X: **[@liustack](https://x.com/liustack)**. What you built with it, which harness you are on, what should come next. New releases land there first. A community space is on the way.
+| Engine | Capability | Free quota | Activation |
+|---|---|---|---|
+| Firecrawl | Web search + page fetch | 1,000 free credits/month | Default, keyless |
+| Keenable | Web search | 1,000 requests/hour/IP | Keyless |
+| You.com | Web search | 100 requests/day/IP | Keyless |
+| Antigravity CLI | Web search + page fetch | Free | Install the CLI and sign in |
+| Tavily | Web search | 1,000 credits/month | API key |
+| Exa | Web search | $10/month of credits (about 1,400 searches, no card needed) | API key |
+| MiniMax | Web search | M Plan subscription key | API key |
+| GLM coding plan | Web search (MCP) | Included in the coding plan | API key |
+| GLM | Web search (REST) | Pay-per-use, 0.01 CNY/request | API key with balance |
+| MiniMax websearch | Web search | Pay-per-use, 0.03 CNY/request | API key |
+| Grok Build | X (Twitter) search | Rides a SuperGrok or X Premium subscription | Install Grok Build and sign in |
+| local | Page fetch | Free | No setup |
 
-## Features
-
-- **🥇 The strongest free web search plugin for DeepSeek Harness (dsh):** one command installs it, `npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.15`. In the desktop app's Add plugin dialog, enter `modsearch-plus`, not the GitHub URL. Details in [harness setup](docs/harness-setup.md#deepseek-harness-dsh).
-- **Free out of the box, no signup.** Search and page fetch run on Firecrawl Keyless by default: [1,000 free credits/month](https://www.firecrawl.dev/blog/firecrawl-keyless-launch), no account, no API key, no card. Every fallback channel is free too: Antigravity CLI needs only a browser sign-in, and Tavily, Exa, and a free Firecrawl key each add their own monthly quota with no card required.
-- **Automatic failover.** When a channel fails or exhausts its quota, the next one takes over.
-- **Per-engine key rotation.** Give Tavily, Exa, Firecrawl, Keenable, MiniMax, or Zhipu multiple comma-separated keys. Authentication, rate-limit, and quota failures rotate to the next key before the engine chain falls back.
-- **Searches X (Twitter).** With Grok Build installed, ModSearch queries the corpus that web indexes cannot reach.
-- **Install once, use everywhere.** Works in Claude Code, Codex, Pi, and OpenCode.
-
-## See it work
-
-All four screenshots are unedited runs, the first two from the Codex desktop app and the last two from dsh web, driving DeepSeek models with no web access of their own.
-
-Give it a blog link and ask what the post says. Twenty-five seconds later: a structured summary of the whole post, with no browser involved.
-
-![Text-only DeepSeek summarising a blog link through ModSearch](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-codex-fetch.png)
-
-Give it no target at all, just "anything interesting in AI today?". Thirty-six seconds later: six sourced stories, with a closing note on which details came from aggregation and deserve a second look. The note comes from the `uncertainty` field.
-
-![An open-ended question comes back as six sourced stories with a stated confidence caveat](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-codex-search.png)
-
-Ask dsh web for today's top AI stories. dsh's native search tool row runs straight on the modsearch engine chain, and eighteen seconds later three stories come back, each with a source link.
-
-![dsh web's native search running on the modsearch engine chain, returning three sourced stories](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-web-search.png)
-
-Ask which Node.js line is still in maintenance. `read_page` reads the release page and the release schedule in turn, and sixty seconds later the verdict arrives with a version status table and sources at the end.
-
-![read_page reading two pages and returning the Node.js maintenance verdict](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-web-fetch.png)
-
-## Supported engines
-
-Firecrawl and Keenable work with zero setup. Every other engine is one command away. Keys live in `~/.modsearch/config.json` (0600, masked when shown):
-
-| Engine | Does | Free tier | Turn it on |
-| :-- | :-- | :-- | :-- |
-| Firecrawl (default) | web search + page fetch | keyless: 1,000 free credits/month, no signup. A free key adds your own 1,000/month | nothing, it works as installed |
-| Keenable | web search | keyless: 1,000 requests/hour per IP (shared by everyone on that IP), no signup. A free key gives 100,000 requests/month of your own | nothing, it works as installed |
-| You.com | web search | keyless: 100 searches/day per IP (shared by everyone on that IP), no signup | nothing, it works as installed |
-| Antigravity CLI | web search + page fetch | free, browser sign-in | install `agy` and sign in |
-| Tavily | web search | 1,000 credits/month, no card | `modsearch config set tavily.apiKey <key>` |
-| Exa | web search | $10/month recurring credit (~1,400 searches), no card | `modsearch config set exa.apiKey <key>` |
-| MiniMax | web search | M Plan subscription key, model-free search endpoint, no model call | `modsearch config set minimax.apiKey <key>` |
-| MiniMax web_search | web search + written answer | runs a model call with MiniMax's server-side web_search tool (0.03 CNY a call) | `modsearch config set minimax-websearch.apiKey <key>` |
-| Zhipu GLM (coding plan) | web search | included in the coding plan: searches the plan-exclusive MCP, draws down plan credits | `modsearch config set glm-coding.apiKey <key>` |
-| Zhipu GLM | web search | Web Search API, billed per call (0.01 CNY a call from `search_std`) | `modsearch config set glm.apiKey <key>` |
-| Grok Build | X (Twitter) search | rides SuperGrok or X Premium | install `grok` and sign in |
-| local | page fetch | built in, nothing to install | nothing |
-
-Keys can also come from the environment (`TAVILY_API_KEY`, `EXA_API_KEY`, `FIRECRAWL_API_KEY`, `KEENABLE_API_KEY`, `MINIMAX_API_KEY`, `ZAI_API_KEY`). One engine can take multiple keys as a comma-separated value such as `key-one,key-two`, in either the config file or its environment variable. Multiple engines configured means automatic failover, best first. Every engine participates by default. Exclude one with `modsearch config set tavily.enabled false`. Using a Tavily-, Exa-, Firecrawl-, Keenable-, MiniMax-, or Zhipu-compatible third-party or self-hosted endpoint? Point the engine at it: `modsearch config set tavily.baseURL <url>`. Official endpoints stay built into the code and are never written as default config. Every knob, engine by engine, is in the [configuration guide](skills/modsearch/references/configure.md).
+Keyed engines accept comma-separated multiple keys — Tavily, Exa, Firecrawl, Keenable, MiniMax, MiniMax websearch, and Zhipu — and rotate them automatically on authentication failures, rate limits, or exhausted quota. Keys live in `~/.modsearch/config.json` (permissions 0600) or in environment variables such as `TAVILY_API_KEY`. Self-hosted endpoints are set per engine, for example `modsearch config set tavily.baseURL <url>`.
 
 ## Installation
 
-**Step 1, hand it to your AI.** Search and page fetch work as soon as the skill lands, on Firecrawl's free keyless quota, so installation is one message:
+<details>
+<summary>DeepSeek Harness (recommended)</summary>
 
-> Install and configure the modsearch skill following INSTALL.md at https://github.com/liustack/modsearch, then run the health check and tell me the result.
+```sh
+dsh plugin --profile web add modsearch-plus
+```
 
-On DeepSeek Harness (dsh), send the same message. INSTALL.md recognizes dsh and switches to the native plugin instead of the skill, so dsh's own `web_search` runs on modsearch. In the browser UI your AI installs it. The desktop app only takes plugins from its own window, so there your AI asks you to open **Plugins**, click **Add plugin**, and enter `modsearch-plus`.
+In the desktop app, enter `modsearch-plus` in the Add plugin dialog instead. On dsh releases before 0.1.6-alpha.2, the settings card lives under Settings → Plugins → Plugin config.
 
-Prefer a direct command? Install the same skill through [skills.sh](https://skills.sh/):
+</details>
 
-```bash
+<details>
+<summary>Other harnesses</summary>
+
+Claude Code, Codex, Pi, and OpenCode install modsearch as a skill. The skill itself comes from the upstream project:
+
+```sh
 npx skills add liustack/modsearch
 ```
 
-**Step 2 (optional), add more free engines.** Antigravity CLI writes better synthesized answers. A free Tavily, Exa, or Firecrawl key adds a personal quota on top of the keyless one. None requires a card. agy's browser sign-in is the only step that needs your hands:
+</details>
 
-```bash
-curl -fsSL https://antigravity.google/cli/install.sh | bash
-agy                                                           # sign in, then exit
+<details>
+<summary>Build from source</summary>
+
+```sh
+git clone https://github.com/ciskonc/modsearch-plus.git
 ```
 
-Picked a key instead? Send one line to your AI: "set my tavily key to tvly-...".
-
-dsh users have a path that never touches the command line. Open **Plugins** in the dsh sidebar and pick `modsearch-plus`: pick the preferred engine, fill in an API key or a self-hosted endpoint, tick which engines join failover, hit save and it takes effect. On dsh releases before 0.1.6-alpha.2 the same card lives under Settings → Plugins → Plugin config.
-
-![The ModSearch page in the dsh Plugins panel, shown in Chinese: pick the preferred engine, fill in an API key and endpoint, tick the engines that join failover](https://raw.githubusercontent.com/liustack/modsearch/main/assets/demo-dsh-settings-card.jpg)
+</details>
 
 ## Usage
 
-Once installed, you do not need to remember any commands. Just chat. Ask anything that needs checking, or paste a URL, and the skill triggers on its own: it picks an engine, runs the search or fetch, and the answer comes back with sources.
+There are no commands to memorize. After install, the search ability is simply there: when a question needs the web, the model searches mid-conversation, and the answer carries its sources. Aggregated content ships with an uncertainty field marking how reliable it is.
 
-## Documentation
+<details>
+<summary>Settings card</summary>
 
-| Doc | Read it when |
-| :-- | :-- |
-| [INSTALL.md](INSTALL.md) | Installing the skill step by step (written for an agent) |
-| [CLI manual](skills/modsearch/references/cli.md) | The CLI the skill drives: flags, config, doctor |
-| [Troubleshooting](docs/troubleshooting.md) | A command failed and the message needs decoding |
-| [Configuration](skills/modsearch/references/configure.md) | Setting a key, switching engines, fixing config |
-| [Output contract](skills/modsearch/references/output-schema.md) | Parsing the JSON or building on it |
-| [dsh plugin](docs/dsh.md) | Installing, configuring, verifying, and updating the native dsh bundle |
-| [Harness setup](docs/harness-setup.md) | Wiring it into Codex, Claude Code, OpenCode, or Pi |
-| [Security](docs/security.md) | SSRF guards, DNS-rebinding protection, untrusted input |
-| [CHANGELOG](CHANGELOG.md) | Finding what changed in a version |
+In the DeepSeek Harness settings card you pick a preferred engine, enter API keys, set a self-hosted endpoint, and tick the engines that join the failover chain. Saving takes effect immediately, and keys already stored are never sent to the browser.
 
-Proxy fake-IP mode (Clash, Clash Verge Rev, mihomo, Surge) works out of the box. DNS answers in `198.18.0.0/15` are treated as fake-IP placeholders with no switch needed. Literal URLs such as `http://198.18.0.5/` stay blocked when `allowPrivateNetwork` is off. For other reserved ranges used by VPNs or hosts-file accelerators such as Steam++ / Watt Toolkit, see [Blocked private network target](docs/troubleshooting.md#blocked-private-network-target).
+</details>
 
-## Contributing
+<details>
+<summary>How it plugs into DSH</summary>
 
-This repo does not accept pull requests. The project is maintained by the author alone. Every line is reviewed in person, and that review is the premise of its reliability. Two effective ways to contribute:
+The engine chain becomes the search provider of DSH's native web seam — the built-in `web_search` tool runs on modsearch — while `x_search` and `read_page` are registered as raw tools the model can call directly.
 
-- **[Open an issue](https://github.com/liustack/modsearch/issues).** Bugs, suggestions, confusing errors, unclear docs. Issues are read and shape what gets built next.
-- **Fork it.** Under MIT your copy is fully yours to modify and publish.
+</details>
 
-## Shameless plug
+## Compatibility
 
-Follow the WeChat official account **liustack** (Chinese-language): AI tools, practice, and ideas, posted as they land. Scan the code, or search WeChat for "liustack":
+| Plugin version | DSH version tested | Notes |
+|---|---|---|
+| 5.10.15 (2026-11-20) | 0.2.2-rc.5 | Current release |
+| 5.10.14 | 0.2.2-rc.5 | Settings card fix for DSH rc.5 |
+| 5.10.x | DSH ≥ 0.2.x | The 5.10.x line is tested on DSH 0.2.x and later |
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/liustack/modsearch/main/assets/wechat-qrcode.png" width="420" alt="WeChat official account liustack" />
-</p>
+Non-DSH hosts (Claude Code, Codex, Pi, OpenCode) run modsearch as a skill, so the DSH column does not apply there.
 
-⭐ If it helps, star [ModSearch](https://github.com/liustack/modsearch). Stars are how the next developer finds it.
+## Credits
 
-## Star History
+modsearch-plus is a fork of [liustack/modsearch](https://github.com/liustack/modsearch): the engine chain and the plugin itself come from upstream, and this fork adds the native MiniMax and GLM (Zhipu) engines on top. Thanks to the upstream project.
 
-<a href="https://www.star-history.com/?repos=liustack%2Fmodsearch&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=liustack/modsearch&type=date&theme=dark&legend=top-left&sealed_token=ymc92zQxHuDgpexZjaqDbEhMCuCjGHskpQGkzkwwrU0FksWoq5MasrMA64y9G2CxNV9O3EFeRjKneWSDYmHH4HWjpUiaAme0haCp-1Y72cRmHDv8coW35A" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=liustack/modsearch&type=date&legend=top-left&sealed_token=ymc92zQxHuDgpexZjaqDbEhMCuCjGHskpQGkzkwwrU0FksWoq5MasrMA64y9G2CxNV9O3EFeRjKneWSDYmHH4HWjpUiaAme0haCp-1Y72cRmHDv8coW35A" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=liustack/modsearch&type=date&legend=top-left&sealed_token=ymc92zQxHuDgpexZjaqDbEhMCuCjGHskpQGkzkwwrU0FksWoq5MasrMA64y9G2CxNV9O3EFeRjKneWSDYmHH4HWjpUiaAme0haCp-1Y72cRmHDv8coW35A" />
- </picture>
-</a>
-
-## Disclaimer
-
-ModSearch is MIT-licensed, so use is not restricted. The author gives no warranty and no endorsement for any particular use, commercial or otherwise. The upstream engines it drives (Antigravity CLI, Tavily, Exa, Firecrawl, Keenable, MiniMax, Zhipu GLM, Grok Build) each carry their own terms and quotas, and complying with them is the user's responsibility.
+Thanks to the engine providers behind the chain: Firecrawl, Keenable, You.com, Antigravity CLI, Tavily, Exa, MiniMax, Zhipu (GLM), and Grok.
 
 ## License
 
-MIT
+MIT. Licensing information is maintained in the [repository](https://github.com/ciskonc/modsearch-plus).
