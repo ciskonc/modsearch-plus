@@ -3,8 +3,10 @@
 // dsh web users have no terminal, so `modsearch config set` is out of reach
 // there and an engine key had no way in. dsh renders no generic form from a
 // settings schema, so this card is contributed through a slot rather than
-// declared as one: `plugins.bundle.config` on the Plugins page from dsh
-// 0.1.6-alpha.2 on, `settings.plugin.item` in Settings before. It reads and
+// declared as one: `plugins.bundle.config`, dispatched by the bundle's
+// profile package name on the Plugins page (the old `settings.plugin.item`
+// Settings seat was removed in the same release that retired the scoped
+// client ctx.inject contract this file used to wait on). It reads and
 // writes the plugin's own route, which owns ~/.modsearch/config.json: the
 // browser never sees an API key, and never sends a blank one back over a
 // stored one.
@@ -44,8 +46,13 @@ window.__ModuleLoader__.load({
     // among these would invite a decision that changes no search.
     var CHAIN_ENGINES = ENGINES.filter((name) => name !== 'local');
 
-    // The Plugins page dispatches a bundle's configuration by npm package name.
+    // The Plugins page dispatches a bundle's configuration by the bundle's
+    // profile package name (pkg.name). The profile installs this fork as
+    // `@ciskonc/modsearch` today, and the pending rename moves it to
+    // `modsearch-plus`, so the card registers under both: the one the page
+    // dispatches renders, the other never matches and stays inert.
     var PACKAGE_NAME = 'modsearch-plus';
+    var PROFILE_PACKAGE_NAME = '@ciskonc/modsearch';
 
     // Two short label sets rather than a locale bundle: the card has a couple
     // of dozen strings, and a bundle would be more machinery than the thing it
@@ -1499,55 +1506,35 @@ window.__ModuleLoader__.load({
     }
 
     function registerCard(ctx) {
-      // Reaching for an undeclared service throws in cordis, so each optional
-      // dependency rides a scoped ctx.inject of its own: the closure runs
-      // where the service exists and never runs where it does not, exactly as
-      // the host half takes webServer.
-      if (typeof ctx.inject !== 'function') {
+      // The restricted client ctx (dsh 0.2.2-rc.5 on) attaches this module's
+      // declared services as plain properties — see exports.inject below.
+      // The old scoped contract, ctx.inject(['slots'], callback), is gone on
+      // this ctx: a card waiting on it never registers and never errors,
+      // which is exactly what the upgraded host showed.
+      if (!ctx || !ctx.slots || typeof ctx.slots.inject !== 'function') {
         return;
       }
 
-      // dsh's language service gets an inject of its own, and fills a handle
-      // the card reads later. Listing it beside slots would be worse than
-      // useless: ctx.inject waits for every service named, so on a host that
-      // never provides locale the card would never register at all. Here a
-      // missing service just leaves the handle empty, and the card falls back
-      // to the page language.
-      var localeRef = { current: null };
-      ctx.inject(['locale'], (scope) => {
-        localeRef.current = scope.locale;
-        if (typeof scope.effect === 'function') {
-          scope.effect(
-            () => () => {
-              localeRef.current = null;
-            },
-            'modsearch: locale handle',
-          );
-        }
-      });
-
-      ctx.inject(['slots'], (scope) => {
-        // The card and its route live and die together: with the host route
-        // off (settingsCard: false, or no web profile) a card would only
-        // render an error, which is not what turning a feature off means. Any
-        // response at all proves the route exists; only a 404 or a network
-        // failure reads as absent.
-        fetch('/modsearch/config')
-          .then((response) => {
-            if (response.status === 404) {
-              return;
-            }
-            try {
-              mountCard(scope, localeRef);
-            } catch (error) {
-              console.error(`[modsearch] settings card skipped: ${error}`);
-            }
-          })
-          .catch(() => {});
-      });
+      // The card and its route live and die together: with the host route
+      // off (settingsCard: false, or no web profile) a card would only
+      // render an error, which is not what turning a feature off means. Any
+      // response at all proves the route exists; only a 404 or a network
+      // failure reads as absent.
+      fetch('/modsearch/config')
+        .then((response) => {
+          if (response.status === 404) {
+            return;
+          }
+          try {
+            mountCard(ctx);
+          } catch (error) {
+            console.error(`[modsearch] settings card skipped: ${error}`);
+          }
+        })
+        .catch(() => {});
     }
 
-    function mountCard(ctx, localeRef) {
+    function mountCard(ctx) {
       var react;
       try {
         react = require('react');
@@ -1556,22 +1543,20 @@ window.__ModuleLoader__.load({
         return;
       }
       var ui = require('@deepseek-ai/dsh-client-ui-primitives');
+      // The locale service arrives with the declared inject; the handle keeps
+      // the card's render-time read shape. Absent (a host without the
+      // service) the card falls back to the page language.
+      var localeRef = { current: ctx.locale || null };
       var Card = ConfigCard(react, ui, localeRef);
-      // slots.inject waits until a slot is declared, so each host fills the
-      // one it has and the other wait never fires: from dsh 0.1.6-alpha.2 on
-      // hosts declare only the Plugins page's, older ones only the Settings
-      // one.
+      // slots.inject waits until a slot is declared, so registration rides
+      // the Plugins page's own seat. The Settings one is gone with the same
+      // release that retired the scoped ctx.inject contract.
       ctx.slots.inject('plugins.bundle.config', function* () {
-        yield ctx.slots.register({ name: 'plugins.bundle.config', key: PACKAGE_NAME }, Card);
-      });
-      ctx.slots.inject('settings.plugin.item', function* () {
-        // id for rc.6's list slot, key for rc.7's keyed one: one client serves
-        // both, and the key has to match the settings namespace the host half
-        // registers or the card silently never renders.
         yield ctx.slots.register(
-          { name: 'settings.plugin.item', id: 'modsearch', key: 'modsearch', order: 31 },
+          { name: 'plugins.bundle.config', key: PROFILE_PACKAGE_NAME },
           Card,
         );
+        yield ctx.slots.register({ name: 'plugins.bundle.config', key: PACKAGE_NAME }, Card);
       });
     }
 
@@ -1589,9 +1574,11 @@ window.__ModuleLoader__.load({
       secretFieldProps: secretFieldProps,
       ConfigCard: ConfigCard,
     };
-    // `slots` and `locale` are both optional, so neither is required here:
-    // registerCard takes each on its own scoped inject.
-    exports.inject = [];
+    // Declared services, attached to ctx as plain properties by the loader
+    // (restricted client ctx contract). `slots` is the registration surface;
+    // `locale` feeds the live interface language, and every host that renders
+    // the Plugins page ships both.
+    exports.inject = ['slots', 'locale'];
     return module.exports;
   },
 });

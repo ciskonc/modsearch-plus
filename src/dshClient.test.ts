@@ -34,6 +34,7 @@ interface Definition {
   id: string;
   factory: (require: (id: string) => unknown) => {
     apply: (ctx: unknown) => void;
+    inject?: string[];
     __card: Card;
   };
 }
@@ -130,7 +131,6 @@ const SUMMARY = {
 describe('the settings card mounts only where its route answers', () => {
   function loadCard(configStatus: number) {
     const slotSpecs: Array<Record<string, unknown>> = [];
-    const injected: string[][] = [];
     const definition = evaluate({
       fetch: (url: string) =>
         Promise.resolve({
@@ -145,28 +145,22 @@ describe('the settings card mounts only where its route answers', () => {
       useEffect: () => {},
       useCallback: (fn: unknown) => fn,
     }));
+    // The restricted client ctx contract: declared services arrive as plain
+    // properties, so apply receives ctx.slots (and ctx.locale) directly.
     exports.apply({
-      effect: () => {},
-      inject: (deps: string[], fn: (scope: unknown) => void) => {
-        injected.push(deps);
-        if (deps.includes('slots')) {
-          fn({
-            slots: {
-              inject: (_name: string, gen: () => Generator) => {
-                for (const _entry of gen()) {
-                  // consuming the generator performs the registration
-                }
-              },
-              register: (spec: Record<string, unknown>) => {
-                slotSpecs.push(spec);
-                return spec;
-              },
-            },
-          });
-        }
+      slots: {
+        inject: (_name: string, gen: () => Generator) => {
+          for (const _entry of gen()) {
+            // consuming the generator performs the registration
+          }
+        },
+        register: (spec: Record<string, unknown>) => {
+          slotSpecs.push(spec);
+          return spec;
+        },
       },
     });
-    return { slotSpecs, injected, card: exports.__card, id: definition.id };
+    return { slotSpecs, declared: exports.inject, card: exports.__card, id: definition.id };
   }
 
   it('does not mount where the route is off, instead of rendering an error', async () => {
@@ -177,43 +171,29 @@ describe('the settings card mounts only where its route answers', () => {
     expect(off.slotSpecs).toEqual([]);
   });
 
-  it('registers under the key rc.7 dispatches by and the id rc.6 lists by', async () => {
-    // rc.7 made settings.plugin.item a keyed slot: a card renders only when
-    // its key matches a settings namespace the host serves, and the host half
-    // serves 'modsearch'. rc.6's list slot needed options.id instead, and one
-    // client.js serves both, so both ride along.
+  it('declares its services instead of waiting on the retired scoped inject', () => {
+    // The restricted client ctx (dsh 0.2.2-rc.5 on) hands declared services
+    // to apply as plain properties and no longer serves the scoped
+    // ctx.inject(['slots'], ...) contract: a card waiting on it never
+    // registers and never errors.
     const on = loadCard(200);
-    await settle();
-    const spec = on.slotSpecs.find((entry) => entry.name === 'settings.plugin.item');
-    expect(spec?.key).toBe('modsearch');
-    expect(spec?.id).toBe('modsearch');
+    expect(on.declared).toEqual(['slots', 'locale']);
   });
 
-  it('registers on the Plugins page under the package name', async () => {
-    // dsh 0.1.6-alpha.2 retired settings.plugin.item: a bundle's
-    // configuration lives on its own Plugins page, dispatched by the npm
-    // package name. A card left only in the old slot never renders there,
-    // and neither does one keyed by a name the package no longer has.
+  it('registers on the Plugins page under both package names', async () => {
+    // The page dispatches by the bundle's profile package name (pkg.name):
+    // the profile installs this fork as @ciskonc/modsearch today, and the
+    // pending rename makes it modsearch-plus. Both keys are registered, so
+    // the card renders whichever name the page dispatches; the settings
+    // slot of the pre-rc.5 Settings page is gone and stays gone.
     const on = loadCard(200);
     await settle();
-    const spec = on.slotSpecs.find((entry) => entry.name === 'plugins.bundle.config');
-    expect(spec?.key).toBe(PACKAGE_NAME);
+    const specs = on.slotSpecs.filter((entry) => entry.name === 'plugins.bundle.config');
+    expect(specs.map((entry) => entry.key).sort()).toEqual(
+      [PACKAGE_NAME, '@ciskonc/modsearch'].sort(),
+    );
     // The module id is the entry name dsh-client-modules pairs with the row.
     expect(on.id).toBe(PACKAGE_NAME);
-  });
-
-  it('asks for the locale service on its own inject, not beside slots', async () => {
-    // ctx.inject waits for every service it names. Naming locale beside slots
-    // would mean no card at all on a host that ships no locale service, which
-    // is the opposite of an optional dependency.
-    const on = loadCard(200);
-    await settle();
-    expect(on.injected).toContainEqual(['locale']);
-    expect(on.injected).toContainEqual(['slots']);
-    expect(on.slotSpecs.map((entry) => entry.name).sort()).toEqual([
-      'plugins.bundle.config',
-      'settings.plugin.item',
-    ]);
   });
 });
 
