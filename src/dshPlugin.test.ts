@@ -755,6 +755,63 @@ describe('dsh settings card route', () => {
     );
   });
 
+  it('stores the zhipu channel as its own setting, not as an engine edit', async () => {
+    // The channel belongs to the zhipu engine, so it must not ride along with
+    // the engine the card happens to be editing.
+    await withConfig(
+      {
+        engine: 'exa',
+        engines: { exa: { apiKey: 'exa-b' }, zhipu: { apiKey: 'zai-c' } },
+      },
+      async (handler, file) => {
+        const { status } = await callRoute(
+          handler,
+          postOf({ target: 'exa', apiKey: '', channel: 'coding' }),
+        );
+        expect(status).toBe(200);
+        const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        expect(saved.engines.zhipu).toEqual({ apiKey: 'zai-c', channel: 'coding' });
+        expect(saved.engines.exa).toEqual({ apiKey: 'exa-b' });
+      },
+    );
+  });
+
+  it('removes the zhipu channel when it goes back to the built-in default', async () => {
+    await withConfig(
+      { engines: { zhipu: { apiKey: 'zai-c', channel: 'coding' } } },
+      async (handler, file) => {
+        const { status } = await callRoute(handler, postOf({ channel: 'auto' }));
+        expect(status).toBe(200);
+        const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        expect(saved.engines.zhipu).toEqual({ apiKey: 'zai-c' });
+      },
+    );
+  });
+
+  it('refuses a channel it does not know', async () => {
+    await withConfig({ engines: {} }, async (handler) => {
+      const { status, body } = await callRoute(handler, postOf({ channel: 'balance' }));
+      expect(status).toBe(400);
+      expect(JSON.stringify(body)).toMatch(/invalid channel/);
+    });
+  });
+
+  it('writes the drag order as a priority per engine', async () => {
+    await withConfig(
+      { engines: { tavily: { apiKey: 'tvly-a' }, exa: { apiKey: 'exa-b' } } },
+      async (handler, file) => {
+        const { status } = await callRoute(
+          handler,
+          postOf({ order: ['exa', 'tavily'] }),
+        );
+        expect(status).toBe(200);
+        const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        expect(saved.engines.exa.priority).toBe(1);
+        expect(saved.engines.tavily.priority).toBe(2);
+      },
+    );
+  });
+
   it('removes a cleared endpoint override instead of writing an official default', async () => {
     await withConfig(
       {

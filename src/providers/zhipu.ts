@@ -289,9 +289,14 @@ async function rpc(
 }
 
 /**
- * The MCP server reports failures in two shapes: a JSON-RPC error object, or
- * a plain {code,msg,success:false} body behind HTTP 200. Auth and quota get
- * mapped to key failures so cooldown holds the engine instead of re-hitting.
+ * The MCP server reports failures in three shapes: a JSON-RPC error object, a
+ * plain {code,msg,success:false} body behind HTTP 200, and — the one the
+ * coding-plan server actually uses for a spent package — a normal tool result
+ * whose text carries the error: "MCP error -429: {"error":{"code":"1113",…}}"
+ * with isError set. The third shape looks like a success, so a parser that
+ * only knows the first two answers "no results" for a rejected call. Auth and
+ * quota get mapped to key failures so cooldown holds the engine instead of
+ * re-hitting it.
  */
 function failFromPayload(payload: Record<string, unknown>, secrets: readonly string[]): Error {
   const error = payload.error as { code?: unknown; message?: unknown } | undefined;
@@ -315,7 +320,59 @@ function failFromPayload(payload: Record<string, unknown>, secrets: readonly str
     }
     return new Error(`zhipu (coding plan) MCP failure (code ${code}): ${message}`);
   }
+  // The tool-result shape: the error is inside the text the tool returned.
+  const toolError = toolErrorInResult(payload);
+  if (toolError) {
+    if (toolError.code === '1113' || isQuotaFailureMessage(toolError.message) || toolError.message.includes('1113')) {
+      return new ApiKeyFailureError(
+        `zhipu (coding plan) ran out of plan quota (${toolError.detail}). The account has no coding-plan package left, or none at all.`,
+      );
+    }
+    if (toolError.status === 401 || toolError.status === 403) {
+      return new ApiKeyFailureError(
+        `zhipu (coding plan) rejected the API key (${toolError.detail}). The coding-plan MCP only accepts a plan key.`,
+      );
+    }
+    return new Error(`zhipu (coding plan) MCP failure: ${toolError.detail}`);
+  }
   return new Error('zhipu (coding plan) MCP returned an unrecognized payload');
+}
+
+/**
+ * The failure carried inside a tool result's text, when there is one. The
+ * coding-plan server writes `MCP error -429: {"error":{"code":"1113",…}}`
+ * and sets isError, so a call that failed still arrives as a 200 with a
+ * result body.
+ */
+function toolErrorInResult(payload: Record<string, unknown>): { status: number; message: string; detail: string; code: string } | null {
+  const result = payload.result as { isError?: unknown; content?: Array<{ type?: string; text?: string }> } | undefined;
+  const text = result?.content?.find((block) => block.type === 'text')?.text ?? '';
+  if (result?.isError !== true && !/^MCP error -?\d+/.test(text.trim())) {
+    return null;
+  }
+  const match = /^MCP error -?(\d+):\s*(.*)$/s.exec(text.trim());
+  const status = match ? Number.parseInt(match[1], 10) : 0;
+  const body = match ? match[2] : text.trim();
+  let message = body;
+  let code = '';
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { message?: unknown; code?: unknown };
+      message?: unknown;
+      code?: unknown;
+    };
+    const detail = parsed?.error?.message ?? parsed?.message;
+    if (detail !== undefined && detail !== null) {
+      message = String(detail);
+    }
+    const rawCode = parsed?.error?.code ?? parsed?.code;
+    if (rawCode !== undefined && rawCode !== null) {
+      code = String(rawCode);
+    }
+  } catch {
+    // Not JSON: the body is the message.
+  }
+  return { status, message, detail: `HTTP ${status || '?'} ${message}`.trim(), code };
 }
 
 async function searchMcp(options: EngineRequest, apiKey: string, apiKeySecrets: string[]): Promise<EngineOutput> {
@@ -368,6 +425,13 @@ async function searchMcp(options: EngineRequest, apiKey: string, apiKeySecrets: 
     throw failFromPayload(call.payload, apiKeySecrets);
   }
   if (call.payload.success === false) {
+    throw failFromPayload(call.payload, apiKeySecrets);
+  }
+  // A tool result can carry the failure in its own text with isError set: the
+  // server answers 200 and writes the reason into the content. Reading that as
+  // an empty result set turns a rejected call into "no results found".
+  const toolFailure = toolErrorInResult(call.payload);
+  if (toolFailure) {
     throw failFromPayload(call.payload, apiKeySecrets);
   }
 

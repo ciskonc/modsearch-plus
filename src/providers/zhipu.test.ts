@@ -174,6 +174,60 @@ describe('the zhipu channel setting picks the transport', () => {
       /coding-plan channel also failed/,
     );
   });
+
+  it('reads a failure carried inside the tool result, not as an empty result set', async () => {
+    // The coding-plan server answers 200 and writes the reason into the
+    // tool's text: "MCP error -429: {...}" with isError set. A parser that
+    // only knows the JSON-RPC error shape calls this a successful search
+    // with zero results — and the balance fallback never runs.
+    mockFetchSequence([
+      INIT_RESPONSE,
+      {
+        body: {
+          jsonrpc: '2.0',
+          id: 2,
+          result: {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'MCP error -429: {"error":{"code":"1113","message":"insufficient balance"}}',
+              },
+            ],
+          },
+        },
+      },
+      REST_RESPONSE,
+    ]);
+    const output = await executeZhipuSearch(searchRequest({ channel: 'auto' }));
+    // The plan channel failed, so the balance channel answered.
+    const items = (output.result as { items?: Array<{ title?: string }> }).items;
+    expect(items?.[0]?.title).toBe('REST hit');
+  });
+
+  it('reports the spent package when the plan channel is the only one', async () => {
+    mockFetchSequence([
+      INIT_RESPONSE,
+      {
+        body: {
+          jsonrpc: '2.0',
+          id: 2,
+          result: {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'MCP error -429: {"error":{"code":"1113","message":"no package left"}}',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    await expect(executeZhipuSearch(searchRequest({ channel: 'coding' }))).rejects.toThrow(
+      /ran out of plan quota/,
+    );
+  });
 });
 
 describe('the zhipu key comes from the file or from the environment', () => {
