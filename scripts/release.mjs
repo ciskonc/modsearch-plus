@@ -21,6 +21,10 @@ import { changelogSection } from './changelog.mjs';
 import { stampLaunchers } from './stamp.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Node 24 no longer resolves .cmd shims in spawnSync without a shell, so the
+// package manager needs its Windows name spelled out or the release dies on
+// its first typecheck.
+const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const run = (cmd, args, options = {}) =>
   execFileSync(cmd, args, { cwd: root, encoding: 'utf-8', stdio: 'pipe', ...options }).trim();
 const runLoud = (cmd, args) => execFileSync(cmd, args, { cwd: root, stdio: 'inherit' });
@@ -73,9 +77,9 @@ if (notes.length < 20) {
 }
 
 console.log(`Releasing ${pkg.name} ${pkg.version} -> ${next}\n`);
-runLoud('pnpm', ['typecheck']);
-runLoud('pnpm', ['test']);
-runLoud('pnpm', ['build']);
+runLoud(pnpm, ['typecheck']);
+runLoud(pnpm, ['test']);
+runLoud(pnpm, ['build']);
 
 // --- from here on it is real ---
 
