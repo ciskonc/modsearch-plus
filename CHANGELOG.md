@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 5.10.15 - 2026-11-20
+
+- The package's `repository`, `bugs`, and `homepage` fields now point at `ciskonc/modsearch-plus` instead of the upstream repository. Plugin marketplaces link an npm package to a repository through these fields, so 5.10.14 and earlier never associated with the repository they were published for. A `screenshots.json` now lists the demo images storefronts show for the plugin.
+
 ## 5.10.14 - 2026-11-20
 
 - The ModSearch settings card registers again on dsh 0.2.2-rc.5. That release gives client plugins a restricted context whose declared services arrive as plain properties on the `ctx` handed to `apply`, and the scoped `ctx.inject(['slots'], …)` call the card waited on no longer exists there — so the card silently never registered: `web_search`, `x_search`, and `read_page` kept working, but the engine form was gone from the bundle's Plugins page. The card now declares its services (`inject: ['slots', 'locale']`) and reads `ctx.slots` directly, the way working client halves do.

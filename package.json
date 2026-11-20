@@ -46,12 +46,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liustack/modsearch.git"
+    "url": "git+https://github.com/ciskonc/modsearch-plus.git"
   },
   "bugs": {
-    "url": "https://github.com/liustack/modsearch/issues"
+    "url": "https://github.com/ciskonc/modsearch-plus/issues"
   },
-  "homepage": "https://github.com/liustack/modsearch#readme",
+  "homepage": "https://github.com/ciskonc/modsearch-plus#readme",
   "engines": {
     "node": ">=22.13"
   },
