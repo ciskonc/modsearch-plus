@@ -14,6 +14,7 @@ import {
   type ModsearchConfig,
   type Role,
   ROLES,
+  ZHIPU_CHANNELS,
 } from './config.ts';
 import {
   coolingEntry,
@@ -299,27 +300,31 @@ function diagnoseEngine(
     };
   }
 
-  if (engine.name === 'glm' || engine.name === 'glm-coding') {
+  if (engine.name === 'zhipu') {
     const { count, source: keySource } = configuredApiKeysFrom(
-      ['ZAI_API_KEY', 'ZHIPUAI_API_KEY', 'ZAI_CODING_CN_API_KEY', 'BIGMODEL_API_KEY'],
+      ['ZHIPU_API_KEY', 'ZAI_API_KEY', 'ZHIPUAI_API_KEY', 'ZAI_CODING_CN_API_KEY', 'BIGMODEL_API_KEY'],
       env,
-      config.engines?.[engine.name]?.apiKey,
+      config.engines?.zhipu?.apiKey,
     );
     const ready = count > 0;
+    const channel = ZHIPU_CHANNELS.includes(String(config.engines?.zhipu?.channel ?? '').toLowerCase())
+      ? String(config.engines?.zhipu?.channel).toLowerCase()
+      : 'auto';
+    const channelNote =
+      channel === 'coding'
+        ? 'Searches through the coding-plan exclusive MCP and draws down plan credits, not the account balance.'
+        : channel === 'rest'
+          ? 'The REST Web Search API is billed per call against the account balance, so an unfunded account answers 429 (code 1113).'
+          : 'Channel auto: the coding-plan MCP is tried first, and the balance-billed REST API answers when the plan channel fails.';
     return {
-      engine: engine.name,
+      engine: 'zhipu',
       enabled,
       ready,
       keySource,
-      reason:
-        engine.name === 'glm'
-          ? keySource
-            ? `${apiKeyPresentReason(count, keySource)}. The Web Search API is billed per call against the account balance, so an unfunded account answers 429 (code 1113).`
-            : 'no API key (not in ZAI_API_KEY or the config file)'
-          : keySource
-            ? `${apiKeyPresentReason(count, keySource)}. Searches through the coding-plan exclusive MCP and draws down plan credits, not the account balance.`
-            : 'no API key (not in ZAI_API_KEY or the config file)',
-      ...(ready ? {} : { fix: `modsearch config set ${engine.name}.apiKey <key>` }),
+      reason: keySource
+        ? `${apiKeyPresentReason(count, keySource)}. ${channelNote}`
+        : 'no API key (not in ZHIPU_API_KEY / ZAI_API_KEY or the config file)',
+      ...(ready ? {} : { fix: 'modsearch config set zhipu.apiKey <key>' }),
     };
   }
 

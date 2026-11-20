@@ -56,8 +56,7 @@ DeepSeek Harness 网页端的设置卡片：选首选引擎、填 API key、配�
 | Tavily | Web 搜索 | 每月 1000 credits | API key |
 | Exa | Web 搜索 | 每月 $10 额度（约 1400 次搜索，无需绑卡） | API key |
 | MiniMax | Web 搜索 | M Plan 订阅密钥 | API key |
-| GLM coding plan | Web 搜索（MCP） | 套餐内含 | API key |
-| GLM | Web 搜索（REST） | 按次付费，0.01 元/次 | API key（余额计费） |
+| Zhipu | Web 搜索（MCP 或 REST） | 套餐积分，或按次付费 0.01 元/次（余额计费） | API key；通道设置决定走哪条 |
 | MiniMax websearch | Web 搜索 | 按次付费，0.03 元/次 | API key |
 | Grok Build | X（Twitter）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 Grok Build 并登录 |
 | local | 网页抓取 | 免费 | 无需配置 |
@@ -70,7 +69,7 @@ Tavily、Exa、Firecrawl、Keenable、MiniMax、MiniMax websearch、Zhipu（智�
 <summary>DeepSeek Harness（推荐）</summary>
 
 ```sh
-dsh plugin --profile web add modsearch-plus
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.15
 ```
 
 桌面应用在 Add plugin 对话框中输入 `modsearch-plus`。0.1.6-alpha.2 之前的 dsh 版本，设置卡片位于 Settings → Plugins → Plugin config。

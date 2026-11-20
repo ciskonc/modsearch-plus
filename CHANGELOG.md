@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 5.11.0 - 2026-11-21
+
+- The two Zhipu engines are one engine now. `glm-coding` (the plan-exclusive MCP that draws down coding-plan credits) and `glm` (the balance-billed Web Search REST API) were separate entries in the chain, which meant a Zhipu search could take two slots and the settings card showed the same channel picker twice. They are one `zhipu` engine with a `channel` setting: `auto` (default) tries the plan MCP first and falls back to the balance API inside the engine, `coding` uses the plan MCP only, `rest` uses the balance API only. The key moves with it: `zhipu.apiKey`, `ZHIPU_API_KEY` (with `ZAI_API_KEY` still read), and `modsearch config set zhipu.channel coding`.
+- **Breaking**: the old `glm-coding.*` and `glm.*` settings are not migrated. A config file carrying them is read without them, so a Zhipu search needs its key set again under the new name (`modsearch config set zhipu.apiKey <key>`, or the `ZHIPU_API_KEY` / `ZAI_API_KEY` environment variables).
+- The dsh settings card lays the engine chain out as one column with a number per row and a drag handle, so the priority order reads top to bottom instead of hiding in a wrapped row of pills. A row can be dragged to a new position; the arrow buttons stay, so the order is still reachable from the keyboard and by a screen reader.
+- The card shows the Zhipu channel picker once, on the `zhipu` row, and it writes the choice as its own setting rather than as an edit of whichever engine was selected.
+
 ## 5.10.15 - 2026-11-20
 
 - The package's `repository`, `bugs`, and `homepage` fields now point at `ciskonc/modsearch-plus` instead of the upstream repository. Plugin marketplaces link an npm package to a repository through these fields, so 5.10.14 and earlier never associated with the repository they were published for. A `screenshots.json` now lists the demo images storefronts show for the plugin.

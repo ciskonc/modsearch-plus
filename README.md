@@ -56,8 +56,7 @@ Engines run as a chain and fail over automatically: when one is rate-limited, ou
 | Tavily | Web search | 1,000 credits/month | API key |
 | Exa | Web search | $10/month of credits (about 1,400 searches, no card needed) | API key |
 | MiniMax | Web search | M Plan subscription key | API key |
-| GLM coding plan | Web search (MCP) | Included in the coding plan | API key |
-| GLM | Web search (REST) | Pay-per-use, 0.01 CNY/request | API key with balance |
+| Zhipu | Web search (MCP or REST) | Coding-plan credits, or pay-per-use 0.01 CNY/request on the balance | API key; the channel setting picks the transport |
 | MiniMax websearch | Web search | Pay-per-use, 0.03 CNY/request | API key |
 | Grok Build | X (Twitter) search | Rides a SuperGrok or X Premium subscription | Install Grok Build and sign in |
 | local | Page fetch | Free | No setup |
@@ -70,7 +69,7 @@ Keyed engines accept comma-separated multiple keys — Tavily, Exa, Firecrawl, K
 <summary>DeepSeek Harness (recommended)</summary>
 
 ```sh
-dsh plugin --profile web add modsearch-plus
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.15
 ```
 
 In the desktop app, enter `modsearch-plus` in the Add plugin dialog instead. On dsh releases before 0.1.6-alpha.2, the settings card lives under Settings → Plugins → Plugin config.

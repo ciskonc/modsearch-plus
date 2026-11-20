@@ -32,8 +32,7 @@ window.__ModuleLoader__.load({
       'youcom',
       'minimax',
       'minimax-websearch',
-      'glm-coding',
-      'glm',
+      'zhipu',
       'grok-cli',
       'local',
     ];
@@ -77,11 +76,12 @@ window.__ModuleLoader__.load({
         parallel: 'P',
         parallelTick: 'P',
         failoverTick: 'failover',
-        glmChannel: 'GLM channel',
-        glmChannelAuto: 'Plan credits first, then balance',
-        glmChannelCoding: 'Coding-plan credits (MCP)',
-        glmChannelRest: 'Account balance (REST API)',
-        glmChannelOff: 'Neither enabled',        moveUp: 'Move up',
+        zhipuMode: 'Zhipu channel',
+        zhipuModeAuto: 'Auto (plan credits first, then balance)',
+        zhipuModeCoding: 'Coding-plan credits (MCP)',
+        zhipuModeRest: 'Account balance (REST API)',
+        dragHandle: 'Drag to reorder',
+        moveUp: 'Move up',
         moveDown: 'Move down',
         title: 'Search engine (ModSearch)',
         subtitle: 'Search engine provider configuration.',
@@ -148,11 +148,12 @@ window.__ModuleLoader__.load({
         parallel: '并',
         parallelTick: '并',
         failoverTick: '故障转移',
-        glmChannel: 'GLM 通道',
-        glmChannelAuto: '自动（先套餐积分，后余额）',
-        glmChannelCoding: '编程套餐积分（MCP）',
-        glmChannelRest: '账户余额（REST API）',
-        glmChannelOff: '都不启用',
+        zhipuMode: '智谱通道',
+        zhipuModeAuto: '自动（先套餐积分，后余额）',
+        zhipuModeCoding: '编程套餐积分（MCP）',
+        zhipuModeRest: '账户余额（REST API）',
+        dragHandle: '拖动排序',
+        moveUp: '上移',
         moveUp: '上移',
         moveDown: '下移',
         section: '引擎设置',
@@ -241,6 +242,10 @@ window.__ModuleLoader__.load({
         apiKey: '',
         baseURL: current.baseURL || '',
         model: current.model || '',
+        // The zhipu engine's billing-channel mode. It lives at the draft top
+        // level because there is exactly one engine with a channel; the row's
+        // select writes it straight to the host rather than through a save.
+        channel: channelOf(summary),
         enabled: Object.assign(
           {},
           keepEnabled ||
@@ -284,21 +289,12 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Which Zhipu channel the two glm engines may use, read from the failover
-     * flags: both on is the chain (plan credits first), a single one on pins
-     * that channel, both off disables Zhipu search entirely.
+     * The zhipu engine's billing-channel mode, read from the summary. Only
+     * three values are meaningful; anything else is the built-in auto.
      */
-    function glmChannelOf(draft) {
-      const coding = draft.enabled?.['glm-coding'] !== false;
-      const rest = draft.enabled?.glm !== false;
-      return coding && rest ? 'auto' : coding ? 'coding' : rest ? 'rest' : 'off';
-    }
-
-    /** Apply a channel choice as failover flags on the two engines. */
-    function setGlmChannel(draft, channel) {
-      let next = toggleEngine(draft, 'glm-coding', channel === 'auto' || channel === 'coding');
-      next = toggleEngine(next, 'glm', channel === 'auto' || channel === 'rest');
-      return next;
+    function channelOf(summary) {
+      const stored = summary.engines?.zhipu?.channel;
+      return stored === 'coding' || stored === 'rest' ? stored : 'auto';
     }
 
     /** Change automatic participation, clearing an impossible preference. */
@@ -362,6 +358,12 @@ window.__ModuleLoader__.load({
       });
       if (Object.keys(parallel).length > 0) {
         payload.parallel = parallel;
+      }
+      // The zhipu channel rides as its own field: it belongs to the zhipu
+      // engine, not to whichever engine happens to be the preferred one, so it
+      // must not ride along with `target`.
+      if (draft.channel !== undefined && draft.channel !== channelOf(summary)) {
+        payload.channel = draft.channel;
       }
       if (draft.engine !== summary.engine) {
         payload.engine = draft.engine;
@@ -801,7 +803,8 @@ window.__ModuleLoader__.load({
                 (name) =>
                   (draft.parallel?.[name] === true) !==
                   (summary.engines?.[name]?.parallel === true),
-              );
+              ) ||
+              (draft.channel !== undefined && draft.channel !== channelOf(summary));
 
             const set = (key, value) => {
               var next = Object.assign({}, draft);
@@ -844,6 +847,11 @@ window.__ModuleLoader__.load({
             // the light is the last real call's outcome, not a guess; P joins
             // the parallel set; the checkbox is the failover participation it
             // always was.
+            // The chain is a single column: priority reads top to bottom, the
+            // number says which row is which, and the handle is the only place
+            // a drag starts. Keyboard users keep the arrow buttons; everything
+            // else in the row (ticks, selects) stays click-through because the
+            // drag arm is the handle alone.
             const move = (name, delta) => {
               const current = Array.isArray(draft.order) ? draft.order.slice() : chain.slice();
               const at = current.indexOf(name);
@@ -854,6 +862,35 @@ window.__ModuleLoader__.load({
               current.splice(to, 0, current.splice(at, 1)[0]);
               set('order', current);
             };
+            const reorderTo = (name, toIndex) => {
+              const current = Array.isArray(draft.order) ? draft.order.slice() : chain.slice();
+              const at = current.indexOf(name);
+              const to = Math.max(0, Math.min(current.length - 1, toIndex));
+              if (at < 0 || at === to) {
+                return;
+              }
+              current.splice(to, 0, current.splice(at, 1)[0]);
+              set('order', current);
+            };
+            const arrowButton = (name, position, delta, label, glyph) =>
+              h(
+                'button',
+                {
+                  type: 'button',
+                  'aria-label': `${name} ${label}`,
+                  title: label,
+                  disabled: delta < 0 ? position === 0 : position === order.length - 1,
+                  onClick: () => move(name, delta),
+                  style: {
+                    appearance: 'none', font: 'inherit', fontSize: '10px', lineHeight: '12px',
+                    cursor: 'pointer', border: 'none', background: 'none',
+                    color: 'var(--dsw-alias-label-secondary, inherit)', padding: '0 2px',
+                    opacity:
+                      (delta < 0 ? position === 0 : position === order.length - 1) ? 0.3 : 1,
+                  },
+                },
+                glyph,
+              );
             const statusRows = order.map((name, position) => {
               const checked = draft.enabled?.[name] !== false;
               const inParallel = draft.parallel?.[name] === true;
@@ -894,91 +931,20 @@ window.__ModuleLoader__.load({
                   }),
                   visible ? h('span', null, visible) : null,
                 );
-              return h(
-                'div',
-                {
-                  key: name,
-                  style: {
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    minHeight: '32px',
-                    padding: '4px 10px',
-                    border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
-                    borderRadius: '8px',
-                    background: checked
-                      ? 'var(--dsw-alias-bg-layer-3, rgba(127,127,127,0.08))'
-                      : 'transparent',
-                    fontSize: '13px',
-                  },
-                },
-                h(
-                  'span',
-                  {
-                    style: { display: 'inline-flex', flexDirection: 'column', gap: '0' },
-                  },
-                  h(
-                    'button',
-                    {
-                      type: 'button',
-                      'aria-label': `${name} ${t.moveUp}`,
-                      title: t.moveUp,
-                      disabled: position === 0,
-                      onClick: () => move(name, -1),
-                      style: {
-                        appearance: 'none', font: 'inherit', fontSize: '10px', lineHeight: '12px',
-                        cursor: 'pointer', border: 'none', background: 'none',
-                        color: 'var(--dsw-alias-label-secondary, inherit)', padding: '0 2px',
-                        opacity: position === 0 ? 0.3 : 1,
-                      },
-                    },
-                    '▲',
-                  ),
-                  h(
-                    'button',
-                    {
-                      type: 'button',
-                      'aria-label': `${name} ${t.moveDown}`,
-                      title: t.moveDown,
-                      disabled: position === order.length - 1,
-                      onClick: () => move(name, 1),
-                      style: {
-                        appearance: 'none', font: 'inherit', fontSize: '10px', lineHeight: '12px',
-                        cursor: 'pointer', border: 'none', background: 'none',
-                        color: 'var(--dsw-alias-label-secondary, inherit)', padding: '0 2px',
-                        opacity: position === order.length - 1 ? 0.3 : 1,
-                      },
-                    },
-                    '▼',
-                  ),
-                ),
-                h('span', {
-                  title: light,
-                  'aria-label': `${name}: ${light}`,
-                  role: 'img',
-                  style: {
-                    width: '10px', height: '10px', borderRadius: '50%', flex: 'none',
-                    background: color, display: 'inline-block',
-                  },
-                }),
-                h('span', null, name),
-                // grok-cli takes the failover tick too: switching it off is
-                // how the user keeps X requests on the documented degrade
-                // path. It gets no parallel tick (it searches X, not the web)
-                // and the aside says why it is different.
-                // The two Zhipu engines carry the shared channel selector
-                // inside their own rows: this is where a user decides which
-                // GLM channel runs, not in a detached block at the top.
-                name === 'glm-coding' || name === 'glm'
+              // The zhipu engine's billing-channel select: auto/coding/rest,
+              // written to the draft so the save carries it like the fields
+              // above. `off` is gone — that is the failover tick's job now.
+              const zhipuMode =
+                name === 'zhipu'
                   ? h(
                       'select',
                       {
-                        value: glmChannelOf(draft),
-                        'aria-label': `${name} ${t.glmChannel}`,
-                        title: t.glmChannel,
+                        value: channelOf(summary),
+                        'aria-label': `${name} ${t.zhipuMode}`,
+                        title: t.zhipuMode,
                         onChange: (event) => {
                           const value = event.target.value;
-                          draftState[1](setGlmChannel(draft, value));
+                          draftState[1](Object.assign({}, draft, { channel: value }));
                           noteState[1]('');
                         },
                         style: {
@@ -993,14 +959,13 @@ window.__ModuleLoader__.load({
                           background: 'transparent',
                           color: 'var(--dsw-alias-label-secondary, inherit)',
                           colorScheme: cardThemeIsDark() ? 'dark' : 'light',
-                          maxWidth: '150px',
+                          maxWidth: '200px',
                         },
                       },
                       [
-                        { value: 'auto', label: t.glmChannelAuto },
-                        { value: 'coding', label: t.glmChannelCoding },
-                        { value: 'rest', label: t.glmChannelRest },
-                        { value: 'off', label: t.glmChannelOff },
+                        { value: 'auto', label: t.zhipuModeAuto },
+                        { value: 'coding', label: t.zhipuModeCoding },
+                        { value: 'rest', label: t.zhipuModeRest },
                       ].map((option) =>
                         h(
                           'option',
@@ -1016,7 +981,104 @@ window.__ModuleLoader__.load({
                         ),
                       ),
                     )
-                  : null,
+                  : null;
+              return h(
+                'div',
+                {
+                  key: name,
+                  draggable: true,
+                  onDragStart: (event) => {
+                    event.dataTransfer.setData('text/modsearch-engine', name);
+                    event.dataTransfer.effectAllowed = 'move';
+                  },
+                  onDragOver: (event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                  },
+                  onDrop: (event) => {
+                    event.preventDefault();
+                    const dragged = event.dataTransfer.getData('text/modsearch-engine');
+                    if (dragged) {
+                      reorderTo(dragged, position);
+                    }
+                  },
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minHeight: '32px',
+                    padding: '4px 10px',
+                    border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
+                    borderRadius: '8px',
+                    background: checked
+                      ? 'var(--dsw-alias-bg-layer-3, rgba(127,127,127,0.08))'
+                      : 'transparent',
+                    fontSize: '13px',
+                  },
+                },
+                // The drag handle owns the grab cursor and the drag semantics;
+                // the row itself stays a plain container so a click on a tick
+                // never turns into a drag.
+                h(
+                  'span',
+                  {
+                    draggable: true,
+                    title: t.dragHandle,
+                    'aria-hidden': true,
+                    onDragStart: (event) => {
+                      event.dataTransfer.setData('text/modsearch-engine', name);
+                      event.dataTransfer.effectAllowed = 'move';
+                    },
+                    style: {
+                      cursor: 'grab',
+                      color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                      flex: 'none',
+                      userSelect: 'none',
+                      fontSize: '14px',
+                      letterSpacing: '1px',
+                      width: '18px',
+                      textAlign: 'center',
+                    },
+                  },
+                  '≡',
+                ),
+                h(
+                  'span',
+                  {
+                    style: {
+                      flex: 'none',
+                      width: '18px',
+                      textAlign: 'center',
+                      fontSize: '12px',
+                      color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                    },
+                  },
+                  position + 1,
+                ),
+                h(
+                  'span',
+                  { style: { display: 'inline-flex', flexDirection: 'column', gap: '0', flex: 'none' } },
+                  arrowButton(name, position, -1, t.moveUp, '▲'),
+                  arrowButton(name, position, 1, t.moveDown, '▼'),
+                ),
+                h('span', {
+                  title: light,
+                  'aria-label': `${name}: ${light}`,
+                  role: 'img',
+                  style: {
+                    width: '10px', height: '10px', borderRadius: '50%', flex: 'none',
+                    background: color, display: 'inline-block',
+                  },
+                }),
+                h('span', { style: { flex: 'none', minWidth: '130px' } }, name),
+                // The channel select rides on the row's right side with the
+                // ticks: one row, one decision about Zhipu.
+                zhipuMode,
+                h('span', { style: { flex: 1 } }),
+                // grok-cli takes the failover tick too: switching it off is
+                // how the user keeps X requests on the documented degrade
+                // path. It gets no parallel tick (it searches X, not the web)
+                // and the aside says why it is different.
                 name === 'grok-cli'
                   ? null
                   : box(
@@ -1166,7 +1228,9 @@ window.__ModuleLoader__.load({
                         'div',
                         {
                           key: 'engines',
-                          style: { display: 'flex', flexWrap: 'wrap', gap: '10px 18px' },
+                          // One column: priority reads top to bottom, and the
+                          // row number says which row is which.
+                          style: { display: 'flex', flexDirection: 'column', gap: '6px' },
                         },
                         statusRows,
                       )

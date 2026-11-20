@@ -118,14 +118,13 @@ const SUMMARY = {
     keenable: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     minimax: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     'minimax-websearch': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
-    'glm-coding': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
-    glm: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
+    zhipu: { baseURL: '', model: '', channel: 'auto', hasKey: false, keySource: null, enabled: true },
     youcom: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     'grok-cli': { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
     local: { baseURL: '', model: '', hasKey: false, keySource: null, enabled: true },
   },
-  keyed: ['tavily', 'exa', 'firecrawl', 'keenable', 'minimax', 'minimax-websearch', 'glm-coding', 'glm'],
-  models: ['antigravity-cli', 'minimax-websearch', 'glm'],
+  keyed: ['tavily', 'exa', 'firecrawl', 'keenable', 'minimax', 'minimax-websearch', 'zhipu'],
+  models: ['antigravity-cli', 'minimax-websearch', 'zhipu'],
 };
 
 describe('the settings card mounts only where its route answers', () => {
@@ -348,13 +347,15 @@ describe('a save carries only what the save is about', () => {
         keenable: true,
         minimax: true,
         'minimax-websearch': true,
-        'glm-coding': true,
-        glm: true,
+        zhipu: true,
         youcom: true,
         'grok-cli': true,
         local: true,
       },
       ai: { allowEngines: false, allowParallel: false },
+      // The zhipu billing-channel mode rides in the draft: the engine has one
+      // channel, and the row's select edits it.
+      channel: 'auto',
       order: CHAIN_ENGINES_ORDER,
       parallel: Object.fromEntries(
         CHAIN_ENGINES_ORDER.map((name) => [name, false]),
@@ -368,6 +369,30 @@ describe('a save carries only what the save is about', () => {
     draft.enabled.tavily = false;
     draft.enabled.exa = true;
     expect(savePayload(SUMMARY, draft).enabled).toEqual({ tavily: false, exa: true });
+  });
+
+  it('carries the zhipu channel as its own field, not as an engine edit', () => {
+    // The channel belongs to the zhipu engine, not to whichever engine the
+    // card happens to be editing, so it cannot ride along with `target`.
+    const { nextDraft, savePayload } = card();
+    const draft = nextDraft(SUMMARY, 'tavily');
+    expect(savePayload(SUMMARY, draft).channel).toBeUndefined();
+
+    draft.channel = 'coding';
+    const payload = savePayload(SUMMARY, draft);
+    expect(payload.channel).toBe('coding');
+    expect(payload.target).toBeUndefined();
+  });
+
+  it('sends the channel back to auto as a change when the mode is reset', () => {
+    const { nextDraft, savePayload } = card();
+    const summary = { ...SUMMARY, engines: { ...SUMMARY.engines, zhipu: { ...SUMMARY.engines.zhipu, channel: 'coding' } } };
+    const draft = nextDraft(summary, 'tavily');
+    expect(draft.channel).toBe('coding');
+    expect(savePayload(summary, draft).channel).toBeUndefined();
+
+    draft.channel = 'auto';
+    expect(savePayload(summary, draft).channel).toBe('auto');
   });
 
   it('leaves the file alone when a preference is switched away and back', () => {
@@ -637,8 +662,7 @@ const CHAIN_ENGINES_ORDER = [
   'youcom',
   'minimax',
   'minimax-websearch',
-  'glm-coding',
-  'glm',
+  'zhipu',
   'grok-cli',
 ];
 
@@ -656,6 +680,50 @@ describe('the automatic engine chain lists what this machine can actually search
   // ready to run. An engine doctor cannot run here is not a row the user can
   // act on, so it is left out entirely rather than shown greyed with a reason
   // beside it, and so is `local`, which fetches pages and never searches.
+
+  it('lays the chain out as one column, so priority reads top to bottom', () => {
+    // A wrapped row of pills hides the order: the reader counts rows to learn
+    // which engine is tried first. One column with a number per row says it.
+    const view = render({ ...SUMMARY, readiness: READINESS });
+    const flatten = (value: unknown): Node[] => {
+      if (Array.isArray(value)) {
+        return value.flatMap(flatten);
+      }
+      return isNode(value) ? [value] : [];
+    };
+    const container = view.nodes.find((node) => {
+      if (node.type !== 'div') {
+        return false;
+      }
+      const style = node.props.style as Record<string, unknown> | undefined;
+      return (
+        style?.flexDirection === 'column' &&
+        flatten(node.kids).some((kid) => kid.props.draggable === true)
+      );
+    });
+    expect(container).toBeDefined();
+  });
+  it('numbers the rows and gives each a drag handle', () => {
+    const view = render({ ...SUMMARY, readiness: READINESS });
+    const rows = view.nodes.filter(
+      (node) => node.type === 'div' && node.props.draggable === true,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      // The handle is the only drag arm: a drag started anywhere else would
+      // fight the tick boxes in the same row.
+      const handles = row.kids.filter(
+        (kid) => isNode(kid) && kid.props.draggable === true && kid.props['aria-hidden'] === true,
+      );
+      expect(handles.length).toBe(1);
+    }
+    // The number rides in the row as its own child, so the first row reads 1.
+    const first = rows[0];
+    const numbers = first.kids
+      .flatMap((kid) => (isNode(kid) ? kid.kids : []))
+      .filter((kid) => typeof kid === 'number');
+    expect(numbers).toContain(1);
+  });
 
   it('drops the engines doctor cannot run here, and says nothing about status', () => {
     const view = render({ ...SUMMARY, readiness: READINESS });
@@ -763,8 +831,7 @@ describe('the automatic engine chain lists what this machine can actually search
       'youcom',
       'minimax',
       'minimax-websearch',
-      'glm-coding',
-      'glm',
+      'zhipu',
       'grok-cli',
     ]);
     expect(view.chain.at(-1)?.text).toContain('X search only');
@@ -955,8 +1022,7 @@ describe('the preference list offers only engines a preference can mean', () => 
       'youcom',
       'minimax',
       'minimax-websearch',
-      'glm-coding',
-      'glm',
+      'zhipu',
       'grok-cli',
     ]);
   });

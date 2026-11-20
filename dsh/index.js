@@ -348,7 +348,7 @@ function registerWebSearchTool(ctx) {
   ctx.tools.register({
     name: 'web_search_pro',
     description:
-      'Multi-mode web search through the modsearch engine chain. Default: the priority chain the user ordered, one engine at a time with automatic failover. "engines" pins named engines for this run (minimax, glm, exa, tavily, firecrawl, keenable, minimax-websearch); "mode": "parallel" runs several whitelisted engines at once and fuses the results with per-item engine attribution — every engine in a parallel run really bills, so reserve it for deep research. Prefer the plain web_search tool for ordinary lookups; reach for this one when the task needs a specific engine or cross-checked multi-engine research. Returns structured evidence with a summary, per-result items (title, URL, snippet, source engines), an uncertainty list, and warnings naming which engines answered or fell over.',
+      'Multi-mode web search through the modsearch engine chain. Default: the priority chain the user ordered, one engine at a time with automatic failover. "engines" pins named engines for this run (minimax, zhipu, exa, tavily, firecrawl, keenable, minimax-websearch); "mode": "parallel" runs several whitelisted engines at once and fuses the results with per-item engine attribution — every engine in a parallel run really bills, so reserve it for deep research. Prefer the plain web_search tool for ordinary lookups; reach for this one when the task needs a specific engine or cross-checked multi-engine research. Returns structured evidence with a summary, per-result items (title, URL, snippet, source engines), an uncertainty list, and warnings naming which engines answered or fell over.',
     parameters: {
       type: 'object',
       properties: {
@@ -364,7 +364,7 @@ function registerWebSearchTool(ctx) {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Engine names to force for this run, tried in order (e.g. ["minimax","glm"]). Only applied when the host allows AI engine selection; otherwise ignored with a warning.',
+            'Engine names to force for this run, tried in order (e.g. ["minimax","zhipu"]). Only applied when the host allows AI engine selection; otherwise ignored with a warning.',
         },
         mode: {
           type: 'string',
@@ -619,8 +619,7 @@ const CARD_ENGINES = [
   'youcom',
   'minimax',
   'minimax-websearch',
-  'glm-coding',
-  'glm',
+  'zhipu',
   'grok-cli',
   'local',
 ];
@@ -632,17 +631,24 @@ const KEYED_ENGINES = [
   'keenable',
   'minimax',
   'minimax-websearch',
-  'glm-coding',
-  'glm',
+  'zhipu',
 ];
+/** The only engine with a billing-channel mode. */
+const ZHIPU_MODES = ['auto', 'coding', 'rest'];
+/**
+ * Environment variables that may carry the Zhipu key besides the bound
+ * ZHIPU_API_KEY: harnesses and coding plans ship it under their own names,
+ * and an engine working off those must not read as unconfigured.
+ */
+const ZHIPU_ENV_FALLBACKS = ['ZAI_API_KEY', 'ZHIPUAI_API_KEY', 'ZAI_CODING_CN_API_KEY', 'BIGMODEL_API_KEY'];
 /**
  * Engines whose `model` setting a run actually reads. The others are shown
  * without the field rather than with one nothing is behind: the HTTP engines
  * ignore it, and grok-cli follows whatever Grok Build is signed in
- * with. The glm engine reads it as the search engine code, and
+ * with. The zhipu engine reads it as the REST search-engine code, and
  * minimax-websearch reads it as the model that runs the search.
  */
-const MODEL_ENGINES = ['antigravity-cli', 'minimax-websearch', 'glm'];
+const MODEL_ENGINES = ['antigravity-cli', 'minimax-websearch', 'zhipu'];
 /**
  * Every accepted spelling, mirroring CANONICAL_ENGINE in src/config.ts.
  * Settings saved under an alias are the same engine's settings, so the card
@@ -654,9 +660,6 @@ const ENGINE_ALIASES = {
   grok: 'grok-cli',
   http: 'local',
   direct: 'local',
-  zhipu: 'glm',
-  bigmodel: 'glm',
-  'glm-plan': 'glm-coding',
   'minimax-search': 'minimax',
 };
 /**
@@ -669,8 +672,7 @@ const ENGINE_ENV_BINDINGS = {
   exa: { apiKey: 'EXA_API_KEY', baseURL: 'EXA_BASE_URL' },
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
-  glm: { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
-  'glm-coding': { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
+  zhipu: { apiKey: 'ZHIPU_API_KEY', baseURL: 'ZHIPU_BASE_URL' },
   minimax: { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
   'minimax-websearch': { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
 };
@@ -791,6 +793,19 @@ function envSettingsFor(engine, env = process.env) {
       settings[field] = value;
     }
   }
+  // The bound variable is the name `config show` reports, but the engine also
+  // reads the vendor's other env spellings; a key under one of those means the
+  // engine is configured and the card must say so.
+  if (engine === 'zhipu' && settings.apiKey === undefined) {
+    for (const variable of ZHIPU_ENV_FALLBACKS) {
+      const value = typeof env[variable] === 'string' ? env[variable].trim() : '';
+      if (value !== '' && hasApiKeys(value)) {
+        settings.apiKey = value;
+        settings.apiKeyEnvVariable = variable;
+        break;
+      }
+    }
+  }
   return settings;
 }
 
@@ -810,6 +825,13 @@ function engineSummary(config = readModsearchConfig(), env = process.env) {
     engines[name] = {
       baseURL: fromEnv.baseURL ?? (typeof fromFile.baseURL === 'string' ? fromFile.baseURL : ''),
       model: typeof fromFile.model === 'string' ? fromFile.model : '',
+      // The billing-channel mode; only zhipu reads it. An absent or unknown
+      // value is the built-in default (auto), which is also what the card
+      // shows when nothing is stored.
+      channel:
+        name === 'zhipu' && ZHIPU_MODES.includes(String(fromFile.channel).toLowerCase())
+          ? String(fromFile.channel).toLowerCase()
+          : 'auto',
       hasKey: envKey || fileKey,
       enabled: coerceBoolean(fromFile.enabled) !== false,
       // Parallel participation and the drag position: undefined means out of
@@ -1045,6 +1067,37 @@ function applyCardSettings(patch) {
       settings.apiKey = apiKey;
     }
     config.engines[target] = settings;
+  }
+  // The zhipu engine's billing-channel mode. It is its own field rather than
+  // part of the engine-field save: the channel belongs to the zhipu engine,
+  // not to whichever engine the card happens to be editing.
+  if (patch?.channel !== undefined) {
+    const channel = typeof patch.channel === 'string' ? patch.channel.trim().toLowerCase() : '';
+    if (!ZHIPU_MODES.includes(channel)) {
+      throw new Error(`invalid channel: ${patch.channel}. Use auto, coding, or rest.`);
+    }
+    if (config.engines !== undefined && !isPlainObject(config.engines)) {
+      throw new Error('the "engines" section of the config file is not an object');
+    }
+    config.engines = { ...config.engines };
+    const holders = fileKeysFor('zhipu', config);
+    const target = holders.length > 0 ? holders[holders.length - 1] : 'zhipu';
+    if (config.engines[target] !== undefined && !isPlainObject(config.engines[target])) {
+      throw new Error(`the "engines.${target}" entry of the config file is not an object`);
+    }
+    const settings = { ...config.engines[target] };
+    // auto is the built-in default, so the file keeps holding only the
+    // choices that depart from it.
+    if (channel === 'auto') {
+      delete settings.channel;
+    } else {
+      settings.channel = channel;
+    }
+    if (Object.keys(settings).length === 0) {
+      delete config.engines[target];
+    } else {
+      config.engines[target] = settings;
+    }
   }
   // Automatic routing grants. Missing means this save did not touch the
   // engine chain. `true` removes the override because enabled is the built-in

@@ -57,7 +57,7 @@ program
   )
   .option(
     '-e, --engine <name>',
-    'Engine for this run, overriding config (antigravity-cli, tavily, exa, firecrawl, keenable, youcom, minimax, glm-coding, glm, minimax-websearch, grok-cli, local); a comma list (minimax,exa) is a strict chain',
+    'Engine for this run, overriding config (antigravity-cli, tavily, exa, firecrawl, keenable, youcom, minimax, zhipu, minimax-websearch, grok-cli, local); a comma list (minimax,zhipu) is a strict chain',
   )
   .option(
     '--parallel',
@@ -184,7 +184,7 @@ config
           `Created ${CONFIG_PATH}`,
           'Everything is optional. Things you can set:',
           '  modsearch config set engine <antigravity-cli|tavily|exa|firecrawl|keenable|youcom>   which engine searches',
-          '  modsearch config set <engine>.<apiKey|bin|model|baseURL|keylessFetch> <value>   engine settings',
+          '  modsearch config set <engine>.<apiKey|bin|model|baseURL|channel|keylessFetch> <value>   engine settings (channel: zhipu only, auto|coding|rest)',
           '  modsearch config set cooldown <on|off>   quota cooldown failover (default on)',
           '  modsearch config set allowPrivateNetwork <true|false>   reach reserved/private ranges (default false)',
           'Search, page fetch, and X need no settings at all: keyless Firecrawl works out of the box.',

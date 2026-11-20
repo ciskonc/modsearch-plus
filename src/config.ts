@@ -25,6 +25,13 @@ export interface EngineSettings {
   apiKey?: string;
   model?: string;
   bin?: string;
+  /**
+   * Which Zhipu billing channel the zhipu engine uses: 'auto' (default, plan
+   * credits first with the balance-billed REST API as the inner fallback),
+   * 'coding' (plan MCP only), or 'rest' (balance-billed REST only). Only the
+   * zhipu engine reads this field.
+   */
+  channel?: string;
   /** Participate in automatic routing. Undefined means enabled. */
   enabled?: boolean;
   /**
@@ -99,8 +106,7 @@ const ENV_BINDINGS: Record<string, Partial<Record<StringEngineSetting, string>>>
   exa: { apiKey: 'EXA_API_KEY', baseURL: 'EXA_BASE_URL' },
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
-  glm: { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
-  'glm-coding': { apiKey: 'ZAI_API_KEY', baseURL: 'ZAI_BASE_URL' },
+  zhipu: { apiKey: 'ZHIPU_API_KEY', baseURL: 'ZHIPU_BASE_URL' },
   minimax: { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
   'minimax-websearch': { apiKey: 'MINIMAX_API_KEY', baseURL: 'MINIMAX_BASE_URL' },
 };
@@ -109,12 +115,16 @@ const SETTABLE_ENGINE_FIELDS: Array<keyof EngineSettings> = [
   'apiKey',
   'model',
   'bin',
+  'channel',
   'enabled',
   'priority',
   'parallel',
   'baseURL',
   'keylessFetch',
 ];
+
+/** The values `zhipu.channel` accepts; anything else is a config-set error. */
+export const ZHIPU_CHANNELS: readonly string[] = ['auto', 'coding', 'rest'];
 
 /** Engines that used to be pinned globally, mapped to the role they serve. */
 const LEGACY_ENGINE_ROLES: Record<string, Role> = {
@@ -135,10 +145,7 @@ const CANONICAL_ENGINE: Record<string, string> = {
   grok: 'grok-cli',
   http: 'local',
   direct: 'local',
-  zhipu: 'glm',
-  bigmodel: 'glm',
   'minimax-search': 'minimax',
-  'glm-plan': 'glm-coding',
 };
 
 /**
@@ -525,6 +532,36 @@ export function setConfigValue(
       config.engines ??= {};
       config.engines[engineName] ??= {};
       config.engines[engineName].priority = parsed;
+      writeConfigFile(config, configPath);
+      return;
+    }
+    if (field === 'channel') {
+      // Only the zhipu engine reads a channel; other engines must not grow a
+      // dead key that suggests the setting does something.
+      if (engineName !== 'zhipu') {
+        throw new Error(
+          `The ${engineName} engine takes no channel setting. Only zhipu has one: auto (plan first, then balance), coding, or rest.`,
+        );
+      }
+      const normalized = value.trim().toLowerCase();
+      if (!ZHIPU_CHANNELS.includes(normalized)) {
+        throw new Error(`Invalid channel: ${value}. Use auto (plan first, then balance), coding, or rest.`);
+      }
+      // auto is the built-in default, so storing it adds nothing.
+      if (normalized === '' || normalized === 'auto') {
+        const settings = config.engines?.zhipu;
+        if (settings) {
+          delete settings.channel;
+          if (Object.keys(settings).length === 0) {
+            delete config.engines?.zhipu;
+          }
+        }
+        writeConfigFile(config, configPath);
+        return;
+      }
+      config.engines ??= {};
+      config.engines.zhipu ??= {};
+      config.engines.zhipu.channel = normalized;
       writeConfigFile(config, configPath);
       return;
     }
