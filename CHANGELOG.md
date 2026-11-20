@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 5.10.14 - 2026-11-20
+
+- The ModSearch settings card registers again on dsh 0.2.2-rc.5. That release gives client plugins a restricted context whose declared services arrive as plain properties on the `ctx` handed to `apply`, and the scoped `ctx.inject(['slots'], …)` call the card waited on no longer exists there — so the card silently never registered: `web_search`, `x_search`, and `read_page` kept working, but the engine form was gone from the bundle's Plugins page. The card now declares its services (`inject: ['slots', 'locale']`) and reads `ctx.slots` directly, the way working client halves do.
+- The card registers under both package names the Plugins page dispatches: the page keys a bundle's configuration by the bundle's profile package name, which is `@ciskonc/modsearch` until a profile renames itself and `modsearch-plus` after — either way the card renders. The retired `settings.plugin.item` registration is dropped; recent dsh releases removed that slot. Values still live in `~/.modsearch/config.json`, shared by the CLI and every dsh profile on the machine, not in dsh profile config.
+
+## 5.10.13 - 2026-11-12
+
 - The npm package is renamed `@ciskonc/modsearch` → `modsearch-plus` (first release under the new name: 5.10.13), matching the GitHub rename to `ciskonc/modsearch-plus`. The dsh bundle id stays `modsearch`, the CLI stays `modsearch`, and `~/.modsearch/config.json` is untouched — only install commands and the package name change. Existing installs of the scoped name keep working; switch with `npx -y @deepseek-ai/dsh plugin --profile <name> add modsearch-plus@5.10.13`.
 - New search engine `glm-coding`: Zhipu's coding plan includes a search entitlement, but on its own endpoint — the plan-exclusive remote MCP server `/api/mcp/web_search_prime/mcp` — whose `web_search_prime` tool draws down plan credits instead of the account balance. A plan key that the Web Search REST API rejects with 429 (code 1113) searches fine through it, which is why it sits ahead of `glm` in the chain: plan credits first, account balance second. The engine runs the MCP initialize/tools-call handshake per search, carries the session id, and reads the double-encoded JSON result. The official docs name the tool `webSearchPrime`; the server actually registers `web_search_prime`. Same key and env aliases as `glm` (`ZAI_API_KEY` or `glm-coding.apiKey`).
 

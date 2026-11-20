@@ -20,7 +20,7 @@ The current bundle has been checked against `@deepseek-ai/dsh 0.1.7-alpha.1`, an
 - npm bundles still declare `dsh.bundle.patch`.
 - The web seam still accepts `ctx.web.registerSearchProvider(...)`.
 - Tools still register through `ctx.tools.register(...)`.
-- A bundle can show its own settings card. From 0.1.6-alpha.2 on it goes on the bundle's page in the Plugins panel, through the `plugins.bundle.config` slot. Earlier releases show it in Settings, through `settings.plugin.item`.
+- A bundle can show its own settings card on the bundle's page in the Plugins panel, through the `plugins.bundle.config` slot. The page keys a bundle's configuration by the bundle's profile package name, and the card registers under both names this package has had (`@ciskonc/modsearch` and `modsearch-plus`), so it renders either way. Recent releases also give client plugins a restricted context whose declared services (`inject: ['slots', 'locale']`) arrive as plain properties on the `ctx` handed to `apply`; the old scoped `ctx.inject(['service'], callback)` contract is gone there, and the card does not use it anymore. The older `settings.plugin.item` Settings seat has been removed by dsh.
 
 dsh is still a preview release, so check again after each dsh update. A quick composition check needs no model, API key, or quota:
 

@@ -20,7 +20,7 @@ ModSearch 是原生 dsh bundle。它保留 dsh 内置的 `web_search` 工具与�
 - npm bundle 仍通过 `dsh.bundle.patch` 声明配置层。
 - web 接缝仍通过 `ctx.web.registerSearchProvider(...)` 接收 provider。
 - 工具仍通过 `ctx.tools.register(...)` 注册。
-- bundle 可以显示自己的设置卡片。从 0.1.6-alpha.2 起，它通过 `plugins.bundle.config` 插槽出现在「插件」面板里该 bundle 的页面上。更早的版本通过 `settings.plugin.item` 把它放在设置页里。
+- bundle 可以通过 `plugins.bundle.config` 插槽，把自己的设置卡片显示在「插件」面板里该 bundle 的页面上。页面上插槽数以 bundle 的 profile 包名派发，而卡片把这个包先后用过的两个名字（`@ciskonc/modsearch` 与 `modsearch-plus`）都注册了，两种装载名下都能渲染。较新的版本还给 client 插件换了受限上下文：声明式服务（`inject: ['slots', 'locale']`）以普通属性挂在 `apply` 收到的 `ctx` 上，旧的作用域 `ctx.inject(['service'], callback)` 契约在那种上下文里已不存在，卡片也不再使用它。更早的 `settings.plugin.item` 设置页卡位已被 dsh 移除。
 
 dsh 仍是预览版本，每次升级后都应重新检查。下面的组合检查不调用模型，不需要 API key，也不消耗额度：
 
