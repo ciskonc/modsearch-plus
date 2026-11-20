@@ -21,10 +21,14 @@ import { changelogSection } from './changelog.mjs';
 import { stampLaunchers } from './stamp.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-// Node 24 no longer resolves .cmd shims in spawnSync without a shell, so the
-// package manager needs its Windows name spelled out or the release dies on
-// its first typecheck.
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+// Node 24 refuses to spawn .cmd shims directly (ENOENT then EINVAL), and the
+// pnpm on Windows PATH is one of those. The three pnpm steps therefore go
+// through a shell on win32; their arguments are fixed literals, so the shell
+// metacharacter surface stays empty. Everything else (git) keeps a direct
+// spawn.
+const pnpmShell = process.platform === 'win32';
+const runPnpm = (args) =>
+  execFileSync('pnpm', args, { cwd: root, stdio: 'inherit', shell: pnpmShell });
 const run = (cmd, args, options = {}) =>
   execFileSync(cmd, args, { cwd: root, encoding: 'utf-8', stdio: 'pipe', ...options }).trim();
 const runLoud = (cmd, args) => execFileSync(cmd, args, { cwd: root, stdio: 'inherit' });
@@ -77,9 +81,9 @@ if (notes.length < 20) {
 }
 
 console.log(`Releasing ${pkg.name} ${pkg.version} -> ${next}\n`);
-runLoud(pnpm, ['typecheck']);
-runLoud(pnpm, ['test']);
-runLoud(pnpm, ['build']);
+runPnpm(['typecheck']);
+runPnpm(['test']);
+runPnpm(['build']);
 
 // --- from here on it is real ---
 
