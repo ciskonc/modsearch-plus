@@ -69,7 +69,7 @@ Tavily、Exa、Firecrawl、Keenable、MiniMax、MiniMax websearch、Zhipu（智�
 <summary>DeepSeek Harness（推荐）</summary>
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.15
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.0
 ```
 
 桌面应用在 Add plugin 对话框中输入 `modsearch-plus`。0.1.6-alpha.2 之前的 dsh 版本，设置卡片位于 Settings → Plugins → Plugin config。
@@ -118,7 +118,8 @@ git clone https://github.com/ciskonc/modsearch-plus.git
 
 | 插件版本 | 实测 DSH | 说明 |
 |---|---|---|
-| 5.10.15（2026-11-20） | 0.2.2-rc.5 | 当前版本 |
+| 5.11.0（2026-11-21） | 0.2.2-rc.5 | 两个智谱引擎合并为单个 `zhipu` 引擎，带 `channel` 设置（`auto` / `coding` / `rest`）；设置卡片把引擎链排成可拖拽的单列。破坏性变更：`glm-coding.*` 与 `glm.*` 配置不迁移，密钥需改设 `zhipu.apiKey` |
+| 5.10.15（2026-11-20） | 0.2.2-rc.5 | 包元数据改为指向本 fork；新增 `screenshots.json` |
 | 5.10.14 | 0.2.2-rc.5 | DSH rc.5 设置卡片修复 |
 | 5.10.x | DSH ≥ 0.2.x | 5.10.x 线在 DSH 0.2.x 及以上测试 |
 
@@ -126,9 +127,9 @@ git clone https://github.com/ciskonc/modsearch-plus.git
 
 ## 致谢
 
-modsearch-plus 是 [liustack/modsearch](https://github.com/liustack/modsearch) 的 fork：引擎链与插件本体来自上游，本 fork 在其上新增 MiniMax 与 GLM（智谱）原生引擎。感谢上游项目。
+modsearch-plus 是 [liustack/modsearch](https://github.com/liustack/modsearch) 的 fork：引擎链与插件本体来自上游，本 fork 在其上新增 MiniMax 与智谱原生引擎。感谢上游项目。
 
-感谢链上引擎服务提供方：Firecrawl、Keenable、You.com、Antigravity CLI、Tavily、Exa、MiniMax、智谱（GLM）、Grok。
+感谢链上引擎服务提供方：Firecrawl、Keenable、You.com、Antigravity CLI、Tavily、Exa、MiniMax、智谱、Grok。
 
 ## 许可证
 

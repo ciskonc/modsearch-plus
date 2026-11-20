@@ -24,7 +24,7 @@ English | [中文](README.zh-CN.md)
 
 ## Introduction
 
-modsearch-plus is a web search plugin for chat applications. It gives the model web search, X search, and page fetch behind a single engine chain that fails over automatically, and it is free to start: no signup, no API key. The repository is a fork of [liustack/modsearch](https://github.com/liustack/modsearch), based on upstream v5.10.10 with the 5.10.11 and 5.10.12 upstream changes merged in, and extends the chain with native MiniMax and GLM (Zhipu) search engines.
+modsearch-plus is a web search plugin for chat applications. It gives the model web search, X search, and page fetch behind a single engine chain that fails over automatically, and it is free to start: no signup, no API key. The repository is a fork of [liustack/modsearch](https://github.com/liustack/modsearch), based on upstream v5.10.10 with the 5.10.11 and 5.10.12 upstream changes merged in, and extends the chain with native MiniMax and Zhipu search engines.
 
 A chat model with no search tool can only answer from what its training data holds. News published after its cutoff and pages that are still changing are out of its reach, and topics it was never trained on are more hopeless still. Faced with those, the model guesses or admits it does not know.
 
@@ -69,7 +69,7 @@ Keyed engines accept comma-separated multiple keys — Tavily, Exa, Firecrawl, K
 <summary>DeepSeek Harness (recommended)</summary>
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.10.15
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.0
 ```
 
 In the desktop app, enter `modsearch-plus` in the Add plugin dialog instead. On dsh releases before 0.1.6-alpha.2, the settings card lives under Settings → Plugins → Plugin config.
@@ -118,7 +118,8 @@ The engine chain becomes the search provider of DSH's native web seam — the bu
 
 | Plugin version | DSH version tested | Notes |
 |---|---|---|
-| 5.10.15 (2026-11-20) | 0.2.2-rc.5 | Current release |
+| 5.11.0 (2026-11-21) | 0.2.2-rc.5 | The two Zhipu engines merge into one `zhipu` engine with a `channel` setting (`auto` / `coding` / `rest`); the settings card lays the chain out as one draggable column. Breaking: `glm-coding.*` and `glm.*` settings are not migrated, set the key as `zhipu.apiKey` |
+| 5.10.15 (2026-11-20) | 0.2.2-rc.5 | Repository metadata now points at this fork; `screenshots.json` added |
 | 5.10.14 | 0.2.2-rc.5 | Settings card fix for DSH rc.5 |
 | 5.10.x | DSH ≥ 0.2.x | The 5.10.x line is tested on DSH 0.2.x and later |
 
@@ -126,9 +127,9 @@ Non-DSH hosts (Claude Code, Codex, Pi, OpenCode) run modsearch as a skill, so th
 
 ## Credits
 
-modsearch-plus is a fork of [liustack/modsearch](https://github.com/liustack/modsearch): the engine chain and the plugin itself come from upstream, and this fork adds the native MiniMax and GLM (Zhipu) engines on top. Thanks to the upstream project.
+modsearch-plus is a fork of [liustack/modsearch](https://github.com/liustack/modsearch): the engine chain and the plugin itself come from upstream, and this fork adds the native MiniMax and Zhipu engines on top. Thanks to the upstream project.
 
-Thanks to the engine providers behind the chain: Firecrawl, Keenable, You.com, Antigravity CLI, Tavily, Exa, MiniMax, Zhipu (GLM), and Grok.
+Thanks to the engine providers behind the chain: Firecrawl, Keenable, You.com, Antigravity CLI, Tavily, Exa, MiniMax, Zhipu, and Grok.
 
 ## License
 
