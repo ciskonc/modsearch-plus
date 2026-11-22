@@ -970,6 +970,45 @@ describe('dsh settings card route', () => {
     }
   });
 
+  it('keeps the order doctor reports, which is the order a run walks', async () => {
+    // The candidates come in the order a run walks them: the user's
+    // priorities first, then the built-in order for the rest. Re-sorting them
+    // by the built-in list threw that away, so the card showed the documented
+    // order whatever the user had arranged, and a saved arrangement snapped
+    // back to it.
+    fakeCli(`
+      if (process.argv[2] !== 'doctor' || process.argv[3] !== '--json') {
+        process.exit(9);
+      }
+      console.log(JSON.stringify({
+        roles: [
+          {
+            role: 'search',
+            candidates: [
+              { engine: 'tavily', ready: true, reason: 'key present', keySource: 'file' },
+              { engine: 'exa', ready: true, reason: 'key present', keySource: 'file' },
+              { engine: 'firecrawl', ready: false, reason: 'no credits', keySource: 'file' },
+            ],
+          },
+          {
+            role: 'social',
+            candidates: [{ engine: 'grok-cli', ready: false, reason: 'binary not found' }],
+          },
+        ],
+      }));
+    `);
+    await withConfig({ engine: '' }, async (handler) => {
+      const { body } = await callRoute(handler, {
+        method: 'GET',
+        url: '/modsearch/config?doctor=1',
+      });
+      const readiness = (body.readiness as Array<Record<string, unknown>>).map(
+        (entry) => entry.engine,
+      );
+      expect(readiness).toEqual(['tavily', 'exa', 'firecrawl', 'grok-cli']);
+    });
+  });
+
   it('reports engine readiness from doctor, and says nothing rather than guessing', async () => {
     fakeCli(`
       if (process.argv[2] !== 'doctor' || process.argv[3] !== '--json') {

@@ -1220,6 +1220,9 @@ async function engineReadiness() {
       return null;
     }
     const found = new Map();
+    // The order the candidates arrive in, which is the order a run walks
+    // them. Kept beside the verdicts so the list can be handed over in it.
+    const order = [];
     const ordered = [...roles].sort(
       (a, b) => READINESS_ROLES.indexOf(a?.role) - READINESS_ROLES.indexOf(b?.role),
     );
@@ -1238,9 +1241,15 @@ async function engineReadiness() {
           reason: typeof candidate.reason === 'string' ? candidate.reason : '',
           keySource: candidate.keySource ?? null,
         });
+        // The order the candidates came in is the order a run walks them:
+        // the user's priorities, then the built-in order for the rest. Putting
+        // the built-in list in front of it threw that order away, so the card
+        // showed the documented order whatever the user had arranged, and a
+        // saved arrangement snapped back to it.
+        order.push(engine);
       }
     }
-    const value = CARD_ENGINES.filter((name) => found.has(name)).map((name) => found.get(name));
+    const value = order.map((name) => found.get(name));
     readinessCache = { cli, at: Date.now(), value };
     return value;
   } catch {
