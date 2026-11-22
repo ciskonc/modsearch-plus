@@ -98,13 +98,22 @@ keenable is out of credits (HTTP 402). ...
 
 The current budget is spent. For Firecrawl this can be an anonymous daily allowance or an account quota. Another search engine picks up the work on its own, and with cooldown on the spent engine is moved to the back of the chain until it recovers. Add credit, switch engines, or wait for the relevant reset. Keenable's keyed allowance is 100,000 requests a month per organization, managed at https://app.keenable.ai.
 
+## Firecrawl keyless allowance used up
+
+```
+firecrawl's keyless allowance for this IP is used up. Resets in 23h48m52s. Set a free key: modsearch config set firecrawl.apiKey <key>, or use keenable or youcom.
+```
+
+With no key, Firecrawl grants each IP a small daily allowance, shared by everyone on that IP. Once it is spent, Firecrawl says how long until it comes back, and with cooldown on modsearch moves Firecrawl to the back of the chain until then, so later runs go straight to Keenable instead of being refused first. Search and page fetch keep working. For your own allowance, set a free key from https://firecrawl.dev.
+
 ## Keenable keyless pool used up for the hour
 
 ```
 keenable's keyless pool for this IP is used up for the hour (1,000 requests). Set a free key for your own quota: modsearch config set keenable.apiKey <key> ...
+keenable's keyless pool for this IP is used up. Resets in 30m0s. Set a free key for your own quota: ...
 ```
 
-With no key, Keenable allows 1,000 requests an hour per IP, and everyone on that IP shares the pool (an office, a VPN exit, a cloud host). It also caps the pool at 10 requests a second. The next search engine in the chain picks up the work on its own. For a quota of your own, take a free key from https://app.keenable.ai: a keyed Keenable has no hourly cap and gives 100,000 requests a month.
+The second form appears when Keenable says how long to wait, and the cooldown holds Keenable until exactly then. With no key, Keenable allows 1,000 requests an hour per IP, and everyone on that IP shares the pool (an office, a VPN exit, a cloud host). It also caps the pool at 10 requests a second. The next search engine in the chain picks up the work on its own. For a quota of your own, take a free key from https://app.keenable.ai: a keyed Keenable has no hourly cap and gives 100,000 requests a month.
 
 ```bash
 modsearch config set keenable.apiKey <key>
@@ -172,9 +181,18 @@ The SSRF guard refused a private or reserved address. Three possible causes:
 - **A hosts-file accelerator** such as Watt Toolkit / Steam++. It writes public domains into the hosts file pointing at `127.0.0.1`, and a local process listens on 443 and forwards. Allow it with `modsearch config set allowPrivateNetwork true`. After allowing, modsearch automatically trusts the OS certificate store on Node 22.15+, so a certificate issued by the proxy's locally installed CA can verify. Node 22.13 and 22.14 cannot read the OS store through this API, so upgrade to 22.15+. To enable system CAs for the whole Node process, `NODE_OPTIONS=--use-system-ca` is available on Node 22.15+, while `NODE_USE_SYSTEM_CA=1` requires Node 22.19+ or 24.6+. Firecrawl is a cloud engine and cannot reach loopback on this machine. This case only works with the local engine.
 - **A genuinely internal address**, which is exactly what the guard exists for. Do not disable the guard to reach it.
 
+## A cloud engine would not fetch a private target
+
+```
+firecrawl does not fetch the private or reserved target intranet.example. Use the local engine instead.
+keenable does not fetch the private or reserved target 10.0.0.5. Use the local engine instead.
+```
+
+Firecrawl and Keenable read pages on their own servers, so modsearch never sends them a URL that points inside your network. A literal private or reserved address is refused outright. A hostname is refused only when every address it resolves to is private or reserved (the `198.18.0.0/15` fake-IP pool of Clash, Surge, and mihomo does not count). In automatic mode the next engine in the chain takes over and the built-in local engine ends up reading the page. Only a forced `-e firecrawl` or `-e keenable` errors out. `allowPrivateNetwork` does not change this, because it opens private ranges for the local fetcher only.
+
 ## Page came back nearly empty
 
-The local engine runs no JavaScript. A page rendered entirely client-side has almost nothing in its HTML, and the result says so in `uncertainty`. Options: fetch it through agy instead (`-e antigravity-cli`), or find a server-rendered URL for the same content.
+The local engine runs no JavaScript. A page rendered entirely client-side has almost nothing in its HTML, and the result says so in `uncertainty`. Keenable's cloud reader may come back sparse for the same reason (its docs do not say whether it runs JavaScript). Options: fetch it through agy instead (`-e antigravity-cli`), or find a server-rendered URL for the same content.
 
 ## A forced engine that cannot run
 
@@ -205,6 +223,19 @@ Failed to parse ... Fix or delete the file.
 ```
 
 Invalid JSON. `modsearch config init --force` rewrites a clean one, losing whatever was in it.
+
+```
+Failed to read the project config /path/to/repo/.modsearch/config.json: ... Fix or delete the file.
+The project config /path/to/repo/.modsearch/config.json is not a JSON object. Fix or delete the file.
+```
+
+A `.modsearch/config.json` found in the current directory or above it is unreadable, not valid JSON, or not a JSON object. Unlike the global file, it fails the run, so a repository's settings never get half-applied. Fix or delete it. To skip the lookup, set `MODSEARCH_PROJECT_CONFIG=off`. `modsearch doctor` names the file in its `project:` line.
+
+```
+modsearch: ignored engines.tavily.apiKey, engines.tavily.bin in /path/to/repo/.modsearch/config.json. A project config may set only engine, engines.<name>.enabled false, and engines.<name>.model. ...
+```
+
+Not an error. The project file set things a project may not set, so they were left out. The line names paths, never values. Keys, `bin`, `baseURL`, `keylessFetch`, `cooldown`, and `allowPrivateNetwork` belong in `~/.modsearch/config.json`. A project's `engine` that names an engine not set up here (Tavily with no key, say) is skipped with a note, and so is a cloud engine whose `keylessFetch` you turned off.
 
 ## Timeouts
 

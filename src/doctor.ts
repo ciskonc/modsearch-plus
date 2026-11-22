@@ -4,11 +4,18 @@
 // binaries are on PATH, and whether the Grok login file exists. Everything it
 // reports is a local fact, so it is safe to run anywhere, any number of times.
 import * as fs from 'fs';
+import * as path from 'path';
 import {
   allowsPrivateNetwork,
   chosenEngine,
   cooldownEnabled,
   currentConfigPath,
+  applyProjectConfig,
+  engineChoiceIsConsent,
+  findProjectConfigPath,
+  loadProjectConfig,
+  projectConfigDisabled,
+  type EngineSettings,
   engineSettings,
   loadConfigFile,
   type ModsearchConfig,
@@ -70,7 +77,7 @@ export interface DoctorReport {
   engineChoice: {
     /** The configured search engine, or null when automatic. */
     value: string | null;
-    source: 'file' | 'default';
+    source: 'file' | 'project' | 'default';
     /** Set when the configured name is not a known engine. */
     problem?: string;
   };
@@ -93,6 +100,11 @@ export interface DoctorReport {
     problem?: string;
   };
   allowPrivateNetwork: { enabled: boolean; source: 'file' | 'default' };
+  /**
+   * The project's `.modsearch/config.json` laid over the global file, or null
+   * when none applies here. `ignored` lists entries a project may not set.
+   */
+  projectConfig: { path: string; ignored: string[]; problem?: string } | null;
   /** Quota cooldown: the switch state and every engine cooling right now. */
   cooldown: { enabled: boolean; statePath: string; engines: CooldownDiagnosis[] };
   roles: RoleDiagnosis[];
@@ -108,6 +120,8 @@ export interface DoctorOptions {
   statePath?: string;
   /** Clock for remaining-time math. Injectable for tests. */
   now?: Date;
+  /** Where the project config lookup starts. Defaults to the working directory. */
+  cwd?: string;
 }
 
 const ROLE_JOB: Record<Role, string> = {
@@ -149,6 +163,28 @@ function configuredApiKeysFrom(
   }
   const fileKeys = splitApiKeys(fromFile);
   return { count: fileKeys.length, source: fileKeys.length > 0 ? 'file' : null };
+}
+
+/**
+ * May this cloud engine fetch with no key? Keyless fetch is on by default and
+ * only an explicit `keylessFetch: false` turns it off. An explicit engine
+ * choice overrides even that (choosing the engine is consent). Mirrors the
+ * providers' isAvailable and the router's unconditional add of the
+ * configured engine.
+ */
+function keylessFetchAllowed(
+  settings: EngineSettings,
+  config: ModsearchConfig,
+  engineName: string,
+): boolean {
+  const configuredEngine = chosenEngine(config);
+  return (
+    settings.keylessFetch === undefined ||
+    settings.keylessFetch === true ||
+    (configuredEngine !== undefined &&
+      engineChoiceIsConsent(config) &&
+      findEngine(configuredEngine)?.name === engineName)
+  );
 }
 
 function apiKeyPresentReason(count: number, source: 'env' | 'file'): string {
@@ -239,14 +275,31 @@ function diagnoseEngine(
       env.KEENABLE_API_KEY,
       config.engines?.keenable?.apiKey,
     );
+    if (role === 'search') {
+      return {
+        engine: engine.name,
+        enabled,
+        ready: true,
+        keySource,
+        reason: keySource
+          ? apiKeyPresentReason(count, keySource)
+          : 'keyless: works with no key and no signup (1,000 requests/hour, shared by everyone on this IP). Set a free key for 100,000 requests/month of your own.',
+      };
+    }
+    // Same consent rule as Firecrawl: an explicit engine choice overrides the
+    // keylessFetch opt-out.
+    const ready = Boolean(keySource) || keylessFetchAllowed(settings, config, 'keenable');
     return {
       engine: engine.name,
       enabled,
-      ready: true,
+      ready,
       keySource,
       reason: keySource
         ? apiKeyPresentReason(count, keySource)
-        : 'keyless: works with no key and no signup (1,000 requests/hour, shared by everyone on this IP). Set a free key for 100,000 requests/month of your own.',
+        : ready
+          ? "keyless fetch (default): public pages are read by Keenable's cloud reader, no key or signup needed. Opt out with: modsearch config set keenable.keylessFetch false"
+          : 'keyless fetch is switched off (keenable.keylessFetch false), so Keenable is excluded from automatic page fetch.',
+      ...(ready ? {} : { fix: 'modsearch config set keenable.keylessFetch true' }),
     };
   }
 
@@ -265,15 +318,7 @@ function diagnoseEngine(
       env.FIRECRAWL_API_KEY,
       config.engines?.firecrawl?.apiKey,
     );
-    const configuredEngine = chosenEngine(config);
-    // Keyless fetch is on by default; only an explicit `keylessFetch: false`
-    // turns it off, and an explicit Firecrawl engine choice overrides even
-    // that (choosing the engine is consent). Mirrors firecrawlProvider and
-    // the router's unconditional add of the configured engine.
-    const keylessFetch =
-      settings.keylessFetch === undefined ||
-      settings.keylessFetch === true ||
-      (configuredEngine !== undefined && findEngine(configuredEngine)?.name === 'firecrawl');
+    const keylessFetch = keylessFetchAllowed(settings, config, 'firecrawl');
     if (role === 'search') {
       return {
         engine: engine.name,
@@ -490,6 +535,26 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     readable = false; // no file is not "readable", it just means defaults
   }
 
+  // The project file, looked up only when doctor reads the real files. A
+  // broken one is reported, not thrown, like the global file above.
+  let projectConfig: DoctorReport['projectConfig'] = null;
+  if (options.config === undefined && !projectConfigDisabled(env)) {
+    const projectPath = findProjectConfigPath(options.cwd, path.dirname(path.dirname(configPath)));
+    if (projectPath) {
+      try {
+        const project = loadProjectConfig(projectPath);
+        config = applyProjectConfig(config, project);
+        projectConfig = { path: projectPath, ignored: project.ignored };
+      } catch (error) {
+        projectConfig = {
+          path: projectPath,
+          ignored: [],
+          problem: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+  }
+
   const ok = compareVersions(nodeVersion, MIN_NODE) >= 0;
 
   const configuredName = chosenEngine(config);
@@ -517,7 +582,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     },
     engineChoice: {
       value: configuredName ?? null,
-      source: configuredName ? 'file' : 'default',
+      source: configuredName ? (engineChoiceIsConsent(config) ? 'file' : 'project') : 'default',
       ...(engineProblem ? { problem: engineProblem } : {}),
     },
     configFile: {
@@ -535,6 +600,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
       enabled: allowPrivate,
       source: allowPrivate ? 'file' : 'default',
     },
+    projectConfig,
     cooldown: diagnoseCooldown(config, statePath, now),
     roles,
   };
@@ -555,9 +621,8 @@ export function formatDoctorReport(report: DoctorReport): string {
 
   lines.push('Config');
   const choice = report.engineChoice;
-  lines.push(
-    `  search engine: ${choice.value ? `${choice.value} (from config file)` : '(unset: automatic)'}`,
-  );
+  const from = choice.source === 'project' ? 'from project config' : 'from config file';
+  lines.push(`  search engine: ${choice.value ? `${choice.value} (${from})` : '(unset: automatic)'}`);
   if (choice.problem) {
     lines.push(`    ! ${choice.problem}`);
   }
@@ -571,6 +636,18 @@ export function formatDoctorReport(report: DoctorReport): string {
     lines.push(`  file: ${file.path} (present, mode ${file.mode})`);
     if (!file.permissionsOk && file.note) {
       lines.push(`    ! ${file.note}`);
+    }
+  }
+  const project = report.projectConfig;
+  if (project) {
+    lines.push(`  project: ${project.path}${project.problem ? ' (unreadable)' : ''}`);
+    if (project.problem) {
+      lines.push(`    ! ${project.problem}`);
+    }
+    if (project.ignored.length > 0) {
+      lines.push(
+        `    ! ignored ${project.ignored.join(', ')}: a project may set only engine, engines.<name>.enabled false, and engines.<name>.model`,
+      );
     }
   }
   lines.push(

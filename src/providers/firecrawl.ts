@@ -11,13 +11,9 @@
 // error. --allow-private-network authorizes local access, never cloud disclosure.
 import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
 import { redactSecrets } from '../util/redact.ts';
+import { resetClause, retryAfterSeconds, SPENT_ALLOWANCE_MIN_SECONDS } from '../util/retryAfter.ts';
 import { requestText } from '../util/timedRequest.ts';
-import {
-  type CloudDisclosureInspection,
-  inspectCloudDisclosureTarget,
-  isLiteralReservedTarget,
-  normalizeFetchUrl,
-} from './http/network.ts';
+import { assertCloudDisclosable, normalizeFetchUrl } from './http/network.ts';
 import type { EngineRequest, EngineOutput, SearchEngine } from './index.ts';
 import { resolveEndpoint } from './endpoint.ts';
 import { MAX_CONTENT_CHARS } from './limits.ts';
@@ -140,7 +136,41 @@ function ensureOk(
   if (apiKey && response.status === 429) {
     throw new ApiKeyFailureError(message);
   }
+  if (!apiKey && response.status === 429) {
+    // Firecrawl answers a spent keyless allowance with 429, `reason: credits`
+    // and a wait of most of a day. Naming the reset lets the cooldown skip
+    // Firecrawl until then rather than spend a refused round trip every run.
+    const wait = keylessWait(text, response);
+    if (wait !== null) {
+      throw new Error(
+        `firecrawl's keyless allowance for this IP is used up. ${resetClause(wait)}. Set a free key: modsearch config set firecrawl.apiKey <key>, or use keenable or youcom.`,
+      );
+    }
+  }
   throw new Error(message);
+}
+
+/**
+ * The wait behind a keyless 429 when it is a spent allowance rather than a
+ * burst limit: the body's `retry_after_seconds`, else Retry-After, counted only
+ * when the body says `reason: credits` or the wait is a minute or more.
+ */
+function keylessWait(text: string, response: Response): number | null {
+  let body: { reason?: unknown; retry_after_seconds?: unknown } = {};
+  try {
+    body = JSON.parse(text);
+  } catch {
+    // A non-JSON body still leaves the header to go by.
+  }
+  const fromBody =
+    typeof body.retry_after_seconds === 'number' && body.retry_after_seconds > 0
+      ? Math.round(body.retry_after_seconds)
+      : null;
+  const wait = fromBody ?? retryAfterSeconds(response);
+  if (wait === null) {
+    return null;
+  }
+  return body.reason === 'credits' || wait >= SPENT_ALLOWANCE_MIN_SECONDS ? wait : null;
 }
 
 async function firecrawlSearch(options: EngineRequest): Promise<EngineOutput> {
@@ -209,31 +239,7 @@ async function firecrawlFetch(options: EngineRequest): Promise<EngineOutput> {
   // One deadline for the DNS check, the request, and the body.
   const deadline = AbortSignal.timeout(options.timeoutMs);
 
-  // A literal private target never leaves the machine. DNS-only classification
-  // is advisory for cloud disclosure: standard 198.18/15 proxy fake IPs count
-  // as public placeholders, and one real public answer makes the hostname
-  // public. --allow-private-network remains local-only and never bypasses this.
-  if (isLiteralReservedTarget(target)) {
-    throw new Error(
-      `firecrawl does not fetch the private or reserved target ${target.hostname}. Use the local engine instead.`,
-    );
-  }
-  let disclosure: CloudDisclosureInspection;
-  try {
-    disclosure = await inspectCloudDisclosureTarget(target, deadline);
-  } catch (error) {
-    if (deadline.aborted) {
-      throw new Error(`firecrawl timed out after ${options.timeoutMs} ms.`);
-    }
-    throw error;
-  }
-  if (disclosure.reserved) {
-    const resolved =
-      disclosure.addresses.length > 0 ? ` -> ${disclosure.addresses.join(', ')}` : '';
-    throw new Error(
-      `firecrawl does not fetch the private or reserved target ${target.hostname}${resolved}. If a VPN or proxy on this machine uses fake-IP DNS, a public hostname may look reserved here. Use the local engine instead.`,
-    );
-  }
+  await assertCloudDisclosable('firecrawl', target, deadline, options.timeoutMs);
 
   const startedAt = Date.now();
   const data = await firecrawlPost<FirecrawlScrapeResponse>(
