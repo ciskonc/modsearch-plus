@@ -19,6 +19,7 @@ import {
 import { agyQuotaEnvelope } from './fixtures/index.ts';
 import { parseAntigravityOutput } from './providers/antigravity.ts';
 import { cleanupTempDirs, expectPosixMode, tempDir } from './testing/helpers.ts';
+import { ApiKeyFailureError } from './util/apiKeys.ts';
 
 afterEach(() => cleanupTempDirs());
 
@@ -417,5 +418,43 @@ describe('the cache never breaks the run, and clear always reaches the disk', ()
     const p = statePath();
     clearEngineCooldown(emptyCooldownState(), 'exa', p);
     expect(fs.existsSync(p)).toBe(false);
+  });
+});
+
+describe('a stated reset time is the cooldown', () => {
+  // The vendor says when the spent credit comes back (Firecrawl answers with
+  // `resets_at`). A cooldown that ends before that only buys another refused
+  // request, so the stated time wins over the default window.
+  it('holds the engine until the reset the vendor named', () => {
+    const now = new Date('2026-11-22T16:03:59.000Z');
+    const resetAt = Date.parse('2026-11-24T04:12:20.711Z');
+    const error = new ApiKeyFailureError(
+      'firecrawl is out of credits: insufficient credits.',
+      'quota',
+      resetAt,
+    );
+    const until = classifyQuota(error, now);
+    expect(until?.toISOString()).toBe('2026-11-24T04:12:20.711Z');
+  });
+
+  it('keeps the default window when the vendor names no time', () => {
+    const now = new Date('2026-11-22T16:03:59.000Z');
+    const error = new ApiKeyFailureError(
+      'firecrawl is out of credits: insufficient credits.',
+      'quota',
+    );
+    const until = classifyQuota(error, now);
+    expect(until?.getTime()).toBe(now.getTime() + 45 * 60_000);
+  });
+
+  it('ignores a reset time in the past', () => {
+    const now = new Date('2026-11-22T16:03:59.000Z');
+    const error = new ApiKeyFailureError(
+      'firecrawl is out of credits: insufficient credits.',
+      'quota',
+      Date.parse('2026-11-20T04:12:20.711Z'),
+    );
+    const until = classifyQuota(error, now);
+    expect(until?.getTime()).toBe(now.getTime() + 45 * 60_000);
   });
 });

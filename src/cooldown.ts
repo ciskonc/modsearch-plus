@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { canonicalEngineName, cooldownEnabled, type ModsearchConfig } from './config.ts';
+import { ApiKeyFailureError } from './util/apiKeys.ts';
 import { redactSecrets } from './util/redact.ts';
 
 export interface CooldownEntry {
@@ -294,6 +295,16 @@ export function classifyQuota(error: unknown, now: Date): Date | null {
   }
   if (!looksQuota) {
     return null;
+  }
+  // The vendor may say when the spent credit comes back (Firecrawl answers
+  // with `resets_at`). That is better than any guess: a cooldown that ends
+  // before the reset only buys another refused request.
+  const statedResetAt =
+    error instanceof ApiKeyFailureError && typeof error.resetAt === 'number'
+      ? error.resetAt
+      : undefined;
+  if (statedResetAt !== undefined && statedResetAt > now.getTime()) {
+    return new Date(statedResetAt);
   }
   const resetMs = parseResetDuration(message);
   const fallbackMs = monthlyQuota ? MONTHLY_COOLDOWN_MS : DEFAULT_COOLDOWN_MS;

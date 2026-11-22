@@ -20,10 +20,18 @@ export class ApiKeyFailureError extends Error {
    */
   readonly kind?: 'auth' | 'quota' | 'rate';
 
-  constructor(message: string, kind?: 'auth' | 'quota' | 'rate') {
+  /**
+   * When the spent credit comes back, as an epoch timestamp. The vendor says
+   * so (Firecrawl answers with `resets_at`), and a cooldown that ends before
+   * that only buys another refused request.
+   */
+  readonly resetAt?: number;
+
+  constructor(message: string, kind?: 'auth' | 'quota' | 'rate', resetAt?: number) {
     super(message);
     this.name = 'ApiKeyFailureError';
     this.kind = kind;
+    this.resetAt = resetAt;
   }
 }
 

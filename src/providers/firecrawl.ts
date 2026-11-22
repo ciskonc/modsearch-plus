@@ -61,6 +61,23 @@ export async function executeFirecrawl(options: EngineRequest): Promise<EngineOu
 }
 
 /**
+ * When the spent credit comes back, as the vendor states it: Firecrawl
+ * answers a spent allowance with `resets_at` in the body.
+ */
+function parseResetsAt(text: string): number | undefined {
+  try {
+    const body = JSON.parse(text) as { resets_at?: unknown };
+    if (typeof body.resets_at !== 'string') {
+      return undefined;
+    }
+    const at = Date.parse(body.resets_at);
+    return Number.isFinite(at) ? at : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * POST to the Firecrawl API and read the whole body under `signal`, so the
  * timeout covers the body as well as the headers. Non-2xx responses become
  * actionable errors here. Returns the parsed JSON of a 2xx response.
@@ -178,6 +195,7 @@ function ensureOk(
     throw new ApiKeyFailureError(
       `firecrawl is out of credits: ${detail || `HTTP ${response.status}`}. Add credit or set your own key at https://firecrawl.dev, or use another engine.`,
       'quota',
+      parseResetsAt(text),
     );
   }
   if (response.status === 401 || response.status === 403) {
