@@ -883,14 +883,9 @@ describe('dsh settings card route', () => {
   it.each([
     { host: 'dsh.example.com', origin: 'https://dsh.example.com' },
     { host: '192.168.1.10:3080', origin: 'http://192.168.1.10:3080' },
-    { host: '127.0.0.1:3080', origin: 'https://dsh.example.com' },
     { host: 'dsh.example.com' },
-    {
-      host: '127.0.0.1:3080',
-      origin: 'https://dsh.example.com',
-      'sec-fetch-site': 'cross-site',
-    },
-  ])('reads and saves settings without a plugin host/origin policy: %j', async (headers) => {
+    { host: '127.0.0.1:3080' },
+  ])('reads and saves settings from the host itself: %j', async (headers) => {
     await withConfig(
       { engine: 'tavily', engines: { tavily: { apiKey: 'tvly-secret' } } },
       async (handler, file) => {
@@ -914,6 +909,39 @@ describe('dsh settings card route', () => {
           engine: 'exa',
           engines: { tavily: { apiKey: 'tvly-secret' } },
         });
+      },
+    );
+  });
+
+  it.each([
+    { host: '127.0.0.1:3080', origin: 'https://dsh.example.com' },
+    {
+      host: '127.0.0.1:3080',
+      origin: 'https://dsh.example.com',
+      'sec-fetch-site': 'cross-site',
+    },
+  ])('refuses a request that came from another site: %j', async (headers) => {
+    // The route registry hands out the raw HTTP server, so the route does not
+    // inherit the harness' authentication: without a policy of its own, a page
+    // open in the browser could rewrite the engine settings — and could spend
+    // the operator's quota on probes.
+    await withConfig(
+      { engine: 'tavily', engines: { tavily: { apiKey: 'tvly-secret' } } },
+      async (handler, file) => {
+        const read = await callRoute(handler, {
+          method: 'GET',
+          url: '/modsearch/config',
+          headers,
+        });
+        expect(read.status).toBe(403);
+
+        const write = await callRoute(handler, {
+          ...postOf({ engine: 'exa' }),
+          headers,
+        });
+        expect(write.status).toBe(403);
+        // The file is untouched: a refused request changes nothing.
+        expect(JSON.parse(fs.readFileSync(file, 'utf-8')).engine).toBe('tavily');
       },
     );
   });
@@ -1242,3 +1270,4 @@ describe('dsh plugin config switches', () => {
     expect(providers).toHaveLength(1);
   });
 });
+

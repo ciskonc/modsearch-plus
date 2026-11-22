@@ -1267,6 +1267,40 @@ async function engineReadiness() {
 }
 
 /**
+ * Whether this request came from a page the browser is showing.
+ *
+ * The route registry hands out the raw HTTP server, so a route does not
+ * inherit the harness' own authentication: without a policy of its own, a
+ * page open in the browser could post to this route and have the engine
+ * settings rewritten, or spend the operator's quota on probes.
+ *
+ * The browser says which it is. A cross-site request carries
+ * `Sec-Fetch-Site: cross-site`, and an Origin that is not this host's own.
+ * A request with neither is a command-line tool or a local script: those are
+ * allowed, because covering the route is the deployment's job (the route
+ * does not sit behind the harness' authentication).
+ */
+function isCrossSiteRequest(req) {
+  const headers = req && req.headers ? req.headers : {};
+  const site = typeof headers['sec-fetch-site'] === 'string' ? headers['sec-fetch-site'] : '';
+  if (site === 'cross-site') {
+    return true;
+  }
+  const origin = typeof headers.origin === 'string' ? headers.origin : '';
+  if (origin === '') {
+    return false;
+  }
+  try {
+    const originHost = new URL(origin).host;
+    const host = typeof headers.host === 'string' ? headers.host : '';
+    return originHost !== host;
+  } catch {
+    // An Origin that does not parse is not this host's origin.
+    return true;
+  }
+}
+
+/**
  * GET /modsearch/config: the summary above. POST: one card submission.
  * Deployment authentication must cover this route. The raw webServer registry
  * does not inherit dsh Connection authentication, and the plugin applies no
@@ -1288,6 +1322,11 @@ function registerConfigRoute(ctx) {
         res.writeHead(status, { 'content-type': 'application/json' });
         res.end(JSON.stringify(body));
       };
+      if (isCrossSiteRequest(req)) {
+        // A page in the browser must not drive this route.
+        send(403, { error: 'cross-site request refused' });
+        return;
+      }
       if (req.method === 'GET') {
         try {
           const summary = engineSummary();
@@ -1342,6 +1381,12 @@ function registerConfigRoute(ctx) {
         res.writeHead(status, { 'content-type': 'application/json' });
         res.end(JSON.stringify(body));
       };
+      if (isCrossSiteRequest(req)) {
+        // A probe spends real quota, so a page in the browser must not be
+        // able to trigger one.
+        send(403, { error: 'cross-site request refused' });
+        return;
+      }
       if (req.method !== 'POST') {
         res.writeHead(405).end();
         return;
