@@ -426,17 +426,23 @@ function registerWebSearchTool(ctx) {
         }
       }
       const entry = await runCli(cliArgs, exec.signal);
+      // The ignored parameters lead, in the summary and in the warnings. A
+      // notice at the end of the result is easy to miss, and a model that
+      // misses it may claim it searched with the engine it asked for — while
+      // the chain answered instead.
+      const summary =
+        ignored.length > 0 ? `${ignored.join(' ')} ${entry.summary ?? ''}`.trim() : entry.summary;
       return {
         status: entry.status,
         source: entry.source,
         requestedSource: entry.requestedSource,
         engine: entry.engine,
-        summary: entry.summary,
+        summary,
         items: Array.isArray(entry.items) ? entry.items : [],
         uncertainty: Array.isArray(entry.uncertainty) ? entry.uncertainty : [],
         warnings: [
-          ...(Array.isArray(entry.warnings) ? entry.warnings : []),
           ...ignored,
+          ...(Array.isArray(entry.warnings) ? entry.warnings : []),
         ],
         attempts: Array.isArray(entry.attempts) ? entry.attempts : [],
       };

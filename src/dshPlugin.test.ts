@@ -1271,3 +1271,49 @@ describe('dsh plugin config switches', () => {
   });
 });
 
+
+describe('a parameter the host ignored is said first, not last', () => {
+  // A notice at the end of the result is easy to miss, and a model that
+  // misses it may claim it searched with the engine it asked for — while the
+  // chain answered instead.
+
+  /**
+   * The tool, running against a config whose AI switches are off. The
+   * plugin reads the user's own config file, so the switches have to be off
+   * there for the parameter to be ignored at all.
+   */
+  async function searchWith(args: Record<string, unknown>) {
+    argvEchoCli();
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'modsearch-home-'));
+    const file = path.join(home, '.modsearch', 'config.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ engines: {} }));
+    const realHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    try {
+      const { tools } = await load();
+      const tool = toolNamed(tools, 'web_search_pro') as RegisteredTool;
+      return (await tool.execute({ query: 'q', ...args }, {})) as {
+        summary: string;
+        warnings: string[];
+      };
+    } finally {
+      process.env.HOME = realHome.HOME;
+      process.env.USERPROFILE = realHome.USERPROFILE;
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  }
+
+  it('leads the summary and the warnings when engines were ignored', async () => {
+    const value = await searchWith({ engines: ['minimax'] });
+    expect(value.summary.startsWith('engines was ignored')).toBe(true);
+    expect(value.warnings[0]).toMatch(/engines was ignored/);
+  });
+
+  it('leads the summary when the parallel mode was ignored', async () => {
+    const value = await searchWith({ mode: 'parallel' });
+    expect(value.summary.startsWith('mode parallel was ignored')).toBe(true);
+    expect(value.warnings[0]).toMatch(/mode parallel was ignored/);
+  });
+});
