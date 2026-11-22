@@ -9,7 +9,7 @@
 // private targets and hostnames proven private by the cloud-disclosure policy
 // are declined. An automatic chain can then try local. A forced run returns an
 // error. --allow-private-network authorizes local access, never cloud disclosure.
-import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { ApiKeyFailureError, isApiKeyFailure, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { resetClause, retryAfterSeconds, SPENT_ALLOWANCE_MIN_SECONDS } from '../util/retryAfter.ts';
 import { requestText } from '../util/timedRequest.ts';
@@ -92,6 +92,70 @@ async function firecrawlPost<T>(
   return JSON.parse(text) as T;
 }
 
+/**
+ * May this call fall back to Firecrawl's keyless pool? Keyless fetch is on
+ * by default and only an explicit `keylessFetch: false` turns it off. A
+ * malformed value is not a yes: it fails closed.
+ */
+function keylessFetchAllowed(settings: { keylessFetch?: unknown }): boolean {
+  const value = settings.keylessFetch;
+  if (value === undefined || value === true) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * The same call, with the keyless pool held in reserve.
+ *
+ * A key with no credits left is worse than no key at all: the keyless
+ * allowance is a separate pool, and a request that carries a spent key is
+ * refused outright. So when the keyed call fails for a quota reason and the
+ * keyless pool is allowed here, the call is made once more without the
+ * Authorization header.
+ *
+ * The key is not forgotten: the answer carries the failure, so the cooldown
+ * layer keeps the spent key out of the chain instead of clearing its
+ * cooldown because this call succeeded. When the keyless call also fails,
+ * the keyed failure is the one reported — it names the real problem.
+ */
+async function firecrawlPostWithFallback<T>(
+  url: string,
+  apiKey: string | null,
+  apiKeySecrets: readonly string[],
+  body: unknown,
+  signal: AbortSignal,
+  timeoutMs: number,
+  allowKeyless: boolean,
+): Promise<{ data: T; keyFailure?: { message: string } }> {
+  if (!apiKey) {
+    return { data: await firecrawlPost<T>(url, null, apiKeySecrets, body, signal, timeoutMs) };
+  }
+  try {
+    return { data: await firecrawlPost<T>(url, apiKey, apiKeySecrets, body, signal, timeoutMs) };
+  } catch (error) {
+    // Only a spent credit falls back: a key the vendor refused, or a request
+    // that was merely too many, is answered by the keyless pool just as
+    // badly, and the keyless pool would not have been any better.
+    if (!allowKeyless || !isApiKeyFailure(error) || error.kind !== 'quota') {
+      throw error;
+    }
+    try {
+      const data = await firecrawlPost<T>(url, null, apiKeySecrets, body, signal, timeoutMs);
+      return {
+        data,
+        keyFailure: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      };
+    } catch {
+      // The keyless pool did not answer either: the keyed failure is the
+      // one that names the problem.
+      throw error;
+    }
+  }
+}
+
 /** Turn a non-2xx API response into an actionable error, quota class included. */
 function ensureOk(
   response: Response,
@@ -113,6 +177,7 @@ function ensureOk(
   if (response.status === 402 || isQuotaFailureMessage(detail)) {
     throw new ApiKeyFailureError(
       `firecrawl is out of credits: ${detail || `HTTP ${response.status}`}. Add credit or set your own key at https://firecrawl.dev, or use another engine.`,
+      'quota',
     );
   }
   if (response.status === 401 || response.status === 403) {
@@ -131,10 +196,11 @@ function ensureOk(
     }
     throw new ApiKeyFailureError(
       `firecrawl rejected the API key (${response.status}). Fix it: modsearch config set firecrawl.apiKey <key>${detail ? ` (${detail})` : ''}`,
+      'auth',
     );
   }
   if (apiKey && response.status === 429) {
-    throw new ApiKeyFailureError(message);
+    throw new ApiKeyFailureError(message, 'rate');
   }
   if (!apiKey && response.status === 429) {
     // Firecrawl answers a spent keyless allowance with 429, `reason: credits`
@@ -185,7 +251,12 @@ async function firecrawlSearch(options: EngineRequest): Promise<EngineOutput> {
   const limit = options.maxResults ?? DEFAULT_LIMIT;
   const startedAt = Date.now();
 
-  const data = await firecrawlPost<FirecrawlSearchResponse>(
+  // A spent key falls back to the keyless pool: the allowance is a separate
+  // one, and a request carrying a spent key is refused outright. The search
+  // path always allows the keyless pool; the switch below governs the fetch
+  // path, where the keyless pool means reading a page through Firecrawl's
+  // cloud.
+  const { data, keyFailure } = await firecrawlPostWithFallback<FirecrawlSearchResponse>(
     resolveEndpoint(options.settings.baseURL, FIRECRAWL_DEFAULT_BASE, '/v2/search'),
     apiKey,
     apiKeySecrets,
@@ -197,6 +268,7 @@ async function firecrawlSearch(options: EngineRequest): Promise<EngineOutput> {
     },
     AbortSignal.timeout(options.timeoutMs),
     options.timeoutMs,
+    true,
   );
 
   const items = (data.data?.web ?? []).map((r) => ({
@@ -224,6 +296,7 @@ async function firecrawlSearch(options: EngineRequest): Promise<EngineOutput> {
       conversationId: null,
       durationSeconds: (Date.now() - startedAt) / 1000,
       usage: { resultCount: items.length, creditsUsed: data.creditsUsed ?? null },
+      ...(keyFailure ? { keyFailure } : {}),
     },
   };
 }
@@ -242,7 +315,10 @@ async function firecrawlFetch(options: EngineRequest): Promise<EngineOutput> {
   await assertCloudDisclosable('firecrawl', target, deadline, options.timeoutMs);
 
   const startedAt = Date.now();
-  const data = await firecrawlPost<FirecrawlScrapeResponse>(
+  // The fetch path falls back to the keyless pool only while the switch
+  // allows it: `keylessFetch: false` is the user saying "do not read pages
+  // through Firecrawl's cloud without a key", and that must hold here too.
+  const { data, keyFailure } = await firecrawlPostWithFallback<FirecrawlScrapeResponse>(
     resolveEndpoint(options.settings.baseURL, FIRECRAWL_DEFAULT_BASE, '/v2/scrape'),
     apiKey,
     apiKeySecrets,
@@ -263,6 +339,7 @@ async function firecrawlFetch(options: EngineRequest): Promise<EngineOutput> {
     },
     deadline,
     options.timeoutMs,
+    keylessFetchAllowed(options.settings),
   );
 
   const metadata = data.data?.metadata ?? {};
@@ -312,6 +389,7 @@ async function firecrawlFetch(options: EngineRequest): Promise<EngineOutput> {
       conversationId: null,
       durationSeconds: (Date.now() - startedAt) / 1000,
       usage: { statusCode: statusCode ?? null },
+      ...(keyFailure ? { keyFailure } : {}),
     },
   };
 }

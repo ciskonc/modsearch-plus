@@ -10,7 +10,7 @@ import {
 } from './providers/index.ts';
 import { parseSources, planRun, SOURCE_ROLE, type SourcePlan } from './router.ts';
 import { runCommand } from './subprocess.ts';
-import { isApiKeyFailure, splitApiKeys } from './util/apiKeys.ts';
+import { ApiKeyFailureError, isApiKeyFailure, splitApiKeys } from './util/apiKeys.ts';
 import { recordHealth } from './util/health.ts';
 import { redactSecrets } from './util/redact.ts';
 
@@ -632,7 +632,24 @@ async function runOneSource(
       ...engineSpend(output.meta.usage),
     });
     // This engine answered, so clear any cooldown it was carrying from before.
-    controller?.clear(engine.name, successfulKeyIndex);
+    // Unless the answer came from somewhere else because the key was spent:
+    // then the key is still out of credit, and clearing its cooldown would put
+    // it back at the front of the chain to be refused again next run.
+    if (output.meta.keyFailure) {
+      const entry = controller?.record(
+        engine.name,
+        new ApiKeyFailureError(output.meta.keyFailure.message),
+        successfulKeyIndex,
+      );
+      if (entry) {
+        const keyNote = successfulKeyIndex === undefined ? '' : ` API key ${successfulKeyIndex + 1}`;
+        cooldownNotes.push(
+          `The ${engine.name} engine${keyNote} is out of credit and is now cooling until ${entry.until}; the answer came from another route.`,
+        );
+      }
+    } else {
+      controller?.clear(engine.name, successfulKeyIndex);
+    }
 
     // Routing and runtime warnings, kept apart from the engine's epistemic
     // uncertainty. Config typos and degrade caveats travel on the plan.

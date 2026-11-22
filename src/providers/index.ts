@@ -53,6 +53,14 @@ export interface EngineOutput {
     conversationId: string | null;
     durationSeconds: number | null;
     usage: unknown | null;
+    /**
+     * The key this engine ran with is spent, when the answer came from
+     * somewhere else (a keyless pool, another channel). The engine answered,
+     * so the run succeeds — but the key must not look healthy: the cooldown
+     * layer has to keep it out of the chain instead of clearing its cooldown
+     * because this call succeeded.
+     */
+    keyFailure?: { message: string };
   };
 }
 

@@ -11,9 +11,19 @@ export function splitApiKeys(value: string | undefined | null): string[] {
 
 /** An authentication, rate-limit, or quota failure tied to the selected key. */
 export class ApiKeyFailureError extends Error {
-  constructor(message: string) {
+  /**
+   * Which kind of failure it was, where the caller knows: 'auth' is a key the
+   * vendor refused, 'quota' is a key that ran out of credit, 'rate' is a
+   * request that was refused for being too many. The kinds differ in what
+   * helps next: a spent credit can be answered from another pool, a refused
+   * key cannot.
+   */
+  readonly kind?: 'auth' | 'quota' | 'rate';
+
+  constructor(message: string, kind?: 'auth' | 'quota' | 'rate') {
     super(message);
     this.name = 'ApiKeyFailureError';
+    this.kind = kind;
   }
 }
 

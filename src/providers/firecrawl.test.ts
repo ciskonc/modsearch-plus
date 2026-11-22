@@ -726,3 +726,97 @@ describe('timeout clamping', () => {
     expect(sent.timeout).toBe(1000);
   });
 });
+
+describe('a spent key falls back to the keyless pool', () => {
+  // A key with no credits left is worse than no key: the keyless allowance is
+  // a separate pool, and a request carrying a spent key is refused outright.
+
+  function mockSequence(steps: Array<{ ok?: boolean; status?: number; text?: string }>) {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    let index = 0;
+    const fn = vi.fn(async (url: string, requestInit: RequestInit) => {
+      calls.push({ url, init: requestInit });
+      const step = steps[Math.min(index, steps.length - 1)];
+      index += 1;
+      const body = step.text ?? JSON.stringify({ success: true, data: { web: [] } });
+      return {
+        ok: step.ok ?? true,
+        status: step.status ?? 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        json: async () => JSON.parse(body),
+        text: async () => body,
+      } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fn);
+    return calls;
+  }
+
+  it('asks again without the Authorization header when the key is out of credit', async () => {
+    const calls = mockSequence([
+      { ok: false, status: 402, text: JSON.stringify({ error: 'insufficient credits' }) },
+      { text: JSON.stringify({ success: true, data: { web: [] } }) },
+    ]);
+    const output = await executeFirecrawl({
+      mode: 'search',
+      query: 'q',
+      timeoutMs: 5000,
+      settings: { apiKey: 'fc-spent' },
+    });
+    expect(calls).toHaveLength(2);
+    const headersOf = (call: { init: RequestInit }) =>
+      (call.init.headers as Record<string, string>).authorization;
+    expect(headersOf(calls[0])).toBe('Bearer fc-spent');
+    expect(headersOf(calls[1])).toBeUndefined();
+    // The key is reported as spent, so the cooldown layer keeps it out of the
+    // chain instead of clearing its cooldown because this call succeeded.
+    expect(output.meta.keyFailure?.message).toMatch(/credits/i);
+  });
+
+  it('does not ask again when the keyless pool is switched off', async () => {
+    const calls = mockSequence([
+      { ok: false, status: 402, text: JSON.stringify({ error: 'insufficient credits' }) },
+      { text: JSON.stringify({ success: true, data: { web: [] } }) },
+    ]);
+    await expect(
+      executeFirecrawl({
+        mode: 'fetch',
+        url: 'https://example.com',
+        timeoutMs: 5000,
+        settings: { apiKey: 'fc-spent', keylessFetch: false },
+      }),
+    ).rejects.toThrow(/credits/i);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('does not ask again when the key was rejected rather than spent', async () => {
+    const calls = mockSequence([
+      { ok: false, status: 401, text: JSON.stringify({ error: 'bad key' }) },
+      { text: JSON.stringify({ success: true, data: { web: [] } }) },
+    ]);
+    await expect(
+      executeFirecrawl({
+        mode: 'search',
+        query: 'q',
+        timeoutMs: 5000,
+        settings: { apiKey: 'fc-bad' },
+      }),
+    ).rejects.toThrow(/rejected the API key/i);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('reports the key failure when the keyless pool cannot answer either', async () => {
+    mockSequence([
+      { ok: false, status: 402, text: JSON.stringify({ error: 'insufficient credits' }) },
+      { ok: false, status: 402, text: JSON.stringify({ error: 'insufficient credits' }) },
+    ]);
+    await expect(
+      executeFirecrawl({
+        mode: 'search',
+        query: 'q',
+        timeoutMs: 5000,
+        settings: { apiKey: 'fc-spent' },
+      }),
+    ).rejects.toThrow(/credits/i);
+  });
+});
