@@ -74,6 +74,16 @@ dsh 插件不维护第二份引擎配置。它继承同一组环境变量，并�
 npx -y modsearch-plus@5.11.0 doctor
 ```
 
+插件自带的 CLI 不在 `PATH` 里：它在装它的那个 profile 下，所以 `modsearch doctor` 要先把该 profile 的 `node_modules/.bin` 加进路径。不想动路径时，有两种跑法：
+
+```sh
+# profile 里的那个二进制
+~/.dsh/profiles/web/node_modules/.bin/modsearch doctor        # macOS / Linux
+$env:USERPROFILE\.dsh\profiles\web\node_modules\.bin\modsearch.cmd doctor   # Windows
+```
+
+`doctor` 读配置并回答引擎是否就绪。它不消耗额度、不发请求，所以"绿灯"只代表**密钥被读到了**，不代表它能用：账户可能已经没有余额。
+
 常用配置：
 
 ```sh

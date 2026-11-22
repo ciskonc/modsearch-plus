@@ -18,6 +18,7 @@ The search order is fixed at `firecrawl` then `keenable` then `youcom` then `ant
 
 Two facts follow from this table, and they answer most questions:
 
+- **The order the user arranged wins.** The chain is built from the built-in list above, then the engines carrying a `priority` are sorted by that number (the settings card writes those numbers from its drag ordering), and the engines without one keep the built-in order behind them. A pinned `engine` is a preference, not a lock: once priorities exist, the numbers decide the order, so pinning does not lift an engine past the ones with smaller numbers.
 - **Page fetch works with no setup.** The `local` engine needs nothing installed and is the default last resort. It only leaves the automatic chain when the user explicitly disables it.
 - **Web search works keyless on Firecrawl's free quota** (1,000 credits/month, no signup), with Keenable's keyless pool (1,000 requests/hour per IP) behind it. A configured `engine` choice takes precedence when set. The search chain does not include `local`, because `local` cannot search. If both keyless engines are rate-limited, search needs at least one keyed engine or `agy` as a fallback. Fetch still has `local` as a floor.
 

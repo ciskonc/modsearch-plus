@@ -74,6 +74,16 @@ Start with the offline health check:
 npx -y modsearch-plus@5.11.0 doctor
 ```
 
+The plugin's own CLI is not on `PATH`: it lives in the profile that installed it, so `modsearch doctor` only works after the profile's `node_modules/.bin` is on the path. Two ways to run it without touching the path:
+
+```sh
+# the profile's own binary
+~/.dsh/profiles/web/node_modules/.bin/modsearch doctor        # macOS / Linux
+$env:USERPROFILE\.dsh\profiles\web\node_modules\.bin\modsearch.cmd doctor   # Windows
+```
+
+`doctor` reads the config and answers whether an engine is set up. It spends no quota and makes no request, so a green verdict means the key is read, not that it works: the account may have no credit left.
+
 Common settings:
 
 ```sh
