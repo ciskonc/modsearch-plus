@@ -725,6 +725,83 @@ describe('the automatic engine chain lists what this machine can actually search
     expect(numbers).toContain(1);
   });
 
+  it('orders the rows by the priority in the config, not by the built-in list', () => {
+    // The host sends every engine's priority with the summary. Reading the
+    // order from the doctor's candidate list instead made the screen show a
+    // snapshot of the last doctor run: a save that changed the priorities
+    // left the rows in the old arrangement, and the next drag wrote that old
+    // arrangement back.
+    const summary = {
+      ...SUMMARY,
+      readiness: [
+        { engine: 'tavily', ready: true },
+        { engine: 'exa', ready: true },
+      ],
+      engines: {
+        ...SUMMARY.engines,
+        tavily: { ...SUMMARY.engines.tavily, priority: 1 },
+        exa: { ...SUMMARY.engines.exa, priority: 2 },
+      },
+    };
+    const view = render(summary);
+    // tavily has the lower priority number, so it is the first row even
+    // though the built-in list puts exa first.
+    expect(view.chain.map((row) => row.label)).toEqual(['tavily', 'exa']);
+  });
+
+  it('saves the whole chain, so the engines that are not ready keep their slots', () => {
+    // The host numbers the engines it is given from 1 and drops the priority
+    // of any engine that is not in the list. Sending only the rows on screen
+    // would renumber the chain and silently drop the slots of the engines
+    // this machine cannot run yet.
+    const summary = {
+      ...SUMMARY,
+      readiness: [
+        { engine: 'tavily', ready: true },
+        { engine: 'exa', ready: true },
+      ],
+      engines: {
+        ...SUMMARY.engines,
+        tavily: { ...SUMMARY.engines.tavily, priority: 1 },
+        exa: { ...SUMMARY.engines.exa, priority: 2 },
+        keenable: { ...SUMMARY.engines.keenable, priority: 3 },
+      },
+    };
+    const { nextDraft, savePayload } = evaluate({}).factory(() => ({})).__card;
+    const draft = nextDraft(summary, 'tavily');
+    // The visible order is the two ready engines; the drag moves one.
+    expect(draft.order).toEqual(['tavily', 'exa']);
+    draft.order = ['exa', 'tavily'];
+    const payload = savePayload(summary, draft);
+    const order = payload.order as string[];
+    // Every chain engine is in the payload, and keenable (not ready here)
+    // keeps the slot it held: third.
+    expect(order).toContain('keenable');
+    expect(order.indexOf('keenable')).toBe(2);
+    expect(order.indexOf('exa')).toBe(0);
+    expect(order.indexOf('tavily')).toBe(1);
+  });
+
+  it('derives the order from the priorities the save returned', () => {
+    // The save answers with the summary the host just wrote. Reading the
+    // order from those priorities is what makes the new arrangement show up
+    // without waiting for a page refresh.
+    const { nextDraft } = evaluate({}).factory(() => ({})).__card;
+    const saved = {
+      ...SUMMARY,
+      readiness: [
+        { engine: 'tavily', ready: true },
+        { engine: 'exa', ready: true },
+      ],
+      engines: {
+        ...SUMMARY.engines,
+        tavily: { ...SUMMARY.engines.tavily, priority: 2 },
+        exa: { ...SUMMARY.engines.exa, priority: 1 },
+      },
+    };
+    expect(nextDraft(saved, 'tavily').order).toEqual(['exa', 'tavily']);
+  });
+
   it('drops the engines doctor cannot run here, and says nothing about status', () => {
     const view = render({ ...SUMMARY, readiness: READINESS });
     expect(view.chain.map((row) => row.label)).toEqual(['tavily', 'firecrawl']);

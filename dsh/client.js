@@ -340,12 +340,17 @@ window.__ModuleLoader__.load({
       if (Object.keys(ai).length > 0) {
         payload.ai = ai;
       }
-      // The ordering: carried only when the visible order moved.
+      // The ordering: carried only when the visible order moved. The payload
+      // is the whole chain, not just the rows on screen: the host numbers the
+      // engines it is given from 1, so sending only the visible ones would
+      // renumber the chain and drop the priorities of the engines that are
+      // not ready here — and the user would find their saved arrangement
+      // quietly rewritten by the next drag.
       var order = Array.isArray(draft.order) ? draft.order : [];
       var before = chainEngines(summary);
       var moved = order.length === before.length && order.every((name, i2) => name === before[i2]) ? false : true;
       if (moved && order.length > 0) {
-        payload.order = order;
+        payload.order = mergeOrder(summary, order);
       }
       // Parallel participation: only the engines whose flag moved.
       var parallel = {};
@@ -417,14 +422,90 @@ window.__ModuleLoader__.load({
      * This list is also what a save is allowed to say about `enabled`: what was
      * never on screen was never edited.
      */
+    /**
+     * Every chain engine, ordered by the priority the config file holds.
+     *
+     * The priority is the authoritative order — the host sends it with every
+     * engine — so the card reads it directly instead of inferring the order
+     * from the doctor's candidate list. Inferring it meant the order on
+     * screen was a snapshot of the last doctor run: a save that changed the
+     * priorities left the rows showing the old arrangement, and the next
+     * drag wrote that old arrangement back to the file.
+     *
+     * Engines without a priority keep the documented order and come after
+     * the ones that have one, which is how a run walks them too.
+     */
+    function fullOrder(summary) {
+      var rank = function (name) {
+        var index = CHAIN_ENGINES.indexOf(name);
+        return index < 0 ? CHAIN_ENGINES.length : index;
+      };
+      return CHAIN_ENGINES.slice().sort(function (a, b) {
+        var pa = summary.engines?.[a]?.priority;
+        var pb = summary.engines?.[b]?.priority;
+        var na = typeof pa === 'number' ? pa : Number.POSITIVE_INFINITY;
+        var nb = typeof pb === 'number' ? pb : Number.POSITIVE_INFINITY;
+        if (na !== nb) {
+          return na - nb;
+        }
+        return rank(a) - rank(b);
+      });
+    }
+
+    /**
+     * The engines the chain actually offers on this machine, in priority
+     * order: the ready ones, placed where the priorities put them.
+     */
     function chainEngines(summary) {
       var probes = Array.isArray(summary.readiness) ? summary.readiness : null;
       if (probes === null) {
-        return CHAIN_ENGINES;
+        return fullOrder(summary);
       }
-      return CHAIN_ENGINES.filter((name) =>
-        probes.some((entry) => entry.engine === name && entry.ready === true),
-      );
+      var ready = {};
+      probes.forEach(function (entry) {
+        if (entry && entry.ready === true) {
+          ready[canonicalChainName(entry.engine)] = true;
+        }
+      });
+      return fullOrder(summary).filter(function (name) {
+        return ready[name] === true;
+      });
+    }
+
+    /** The engine name the card knows an entry by, alias folded. */
+    function canonicalChainName(name) {
+      return typeof name === 'string' ? name.trim().toLowerCase() : '';
+    }
+
+    /**
+     * The whole chain order to save: the engines on screen in the order the
+     * user just set, with the engines that are not on screen (not ready here)
+     * keeping the slots they already held.
+     *
+     * Sending only the visible ones would renumber the chain from 1 and
+     * leave every hidden engine without a priority — a save of a drag would
+     * quietly drop the slots of the engines the user cannot see.
+     */
+    function mergeOrder(summary, visibleOrder) {
+      var full = fullOrder(summary);
+      var visible = Array.isArray(visibleOrder) ? visibleOrder : [];
+      var shown = {};
+      visible.forEach(function (name) {
+        shown[name] = true;
+      });
+      var slots = [];
+      full.forEach(function (name, index) {
+        if (shown[name]) {
+          slots.push(index);
+        }
+      });
+      var merged = full.slice();
+      slots.forEach(function (slot, index) {
+        if (visible[index] !== undefined) {
+          merged[slot] = visible[index];
+        }
+      });
+      return merged;
     }
 
     /**
