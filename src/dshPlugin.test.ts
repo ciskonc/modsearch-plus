@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { migrateLegacyConfig } from './config.ts';
 import { FETCH_RESULT_SCHEMA, SEARCH_RESULT_SCHEMA } from './schema.ts';
 
 const SEARCH_SCHEMA_PATH = new URL('../dsh/search-schema.json', import.meta.url);
@@ -1315,5 +1316,63 @@ describe('a parameter the host ignored is said first, not last', () => {
     const value = await searchWith({ mode: 'parallel' });
     expect(value.summary.startsWith('mode parallel was ignored')).toBe(true);
     expect(value.warnings[0]).toMatch(/mode parallel was ignored/);
+  });
+});
+
+describe('the plugin and the CLI read one config the same way', () => {
+  // The plugin reads the file verbatim and the CLI reads it through the
+  // migration. After the migration stops dropping what it does not own, both
+  // must read the same thing: the engine the user pinned, the AI switches,
+  // and the engine settings.
+  it('reads the pinned engine, the AI switches and the engine settings alike', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'modsearch-home-'));
+    const file = path.join(home, '.modsearch', 'config.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const contents = {
+      engine: 'exa',
+      ai: { allowEngines: true, allowParallel: true },
+      engines: { exa: { apiKey: 'exa-a', priority: 2 }, tavily: { apiKey: 'tvly-a' } },
+    };
+    fs.writeFileSync(file, JSON.stringify(contents));
+    const realHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    try {
+      // The CLI's reading.
+      const migrated = migrateLegacyConfig(
+        JSON.parse(fs.readFileSync(file, 'utf-8')) as never,
+      );
+      // The plugin's reading.
+      const stage = house();
+      // @ts-expect-error untyped on purpose
+      const plugin = (await import('../dsh/index.js')) as {
+        apply: (ctx: unknown, config?: Record<string, unknown>) => void;
+      };
+      plugin.apply(stage.ctx as never, {});
+      const { body } = await callRoute(stage.routes['modsearch-config'], {
+        method: 'GET',
+        url: '/modsearch/config',
+      });
+      const summary = body as {
+        engine: string;
+        ai: { allowEngines: boolean; allowParallel: boolean };
+        engines: Record<string, { apiKey?: string; priority?: number | null }>;
+      };
+      expect(summary.engine).toBe(migrated.engine);
+      expect(summary.ai).toEqual(migrated.ai);
+      // The plugin answers null where the CLI answers undefined for an
+      // absent value; the numbers themselves must be the same.
+      const priorityOf = (value: number | null | undefined) => value ?? undefined;
+      expect(priorityOf(summary.engines.exa.priority)).toBe(
+        priorityOf(migrated.engines?.exa?.priority),
+      );
+      expect(priorityOf(summary.engines.tavily.priority)).toBe(
+        priorityOf(migrated.engines?.tavily?.priority),
+      );
+    } finally {
+      process.env.HOME = realHome.HOME;
+      process.env.USERPROFILE = realHome.USERPROFILE;
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });

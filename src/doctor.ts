@@ -188,7 +188,11 @@ function keylessFetchAllowed(
 }
 
 function apiKeyPresentReason(count: number, source: 'env' | 'file'): string {
-  return `API key present (${count} ${count === 1 ? 'key' : 'keys'}, from ${source})`;
+  // "Ready" here means the key is read, not that it works: doctor spends no
+  // quota and makes no request, so it cannot see whether the key is valid or
+  // whether the account has credit left. Saying so keeps a green verdict
+  // from being read as "this engine will answer".
+  return `API key present (${count} ${count === 1 ? 'key' : 'keys'}, from ${source}). The key is read, not tested: doctor spends no quota, so it cannot see whether the key is valid or the account has credit.`;
 }
 
 /** Compare two dotted numeric versions. Returns negative, zero, or positive. */
@@ -516,12 +520,20 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     try {
       const stat = fs.statSync(configPath);
       const bits = stat.mode & 0o777;
-      mode = bits.toString(8).padStart(3, '0');
       // Judge, don't just report: the file holds API keys. Windows reads back
       // 666/777 for every file, so only platforms with real POSIX permissions
       // (process.getuid exists) get the verdict.
       const enforcesPosixPerms = typeof process.getuid === 'function';
-      permissionsOk = !enforcesPosixPerms || (bits & 0o077) === 0;
+      if (enforcesPosixPerms) {
+        mode = bits.toString(8).padStart(3, '0');
+        permissionsOk = (bits & 0o077) === 0;
+      } else {
+        // Windows has no POSIX mode: reporting 666 for every file reads as a
+        // broken promise ("written 0600" in the docs) when the file's access
+        // is governed by its ACL. The verdict is left out on purpose; the
+        // note below says so.
+        permissionsOk = true;
+      }
     } catch {
       // stat failing is reported through the read path below
     }
@@ -593,6 +605,13 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
       ...(permissionsOk
         ? {}
         : { note: `group/world can read this file. Run: chmod 600 ${configPath}` }),
+      ...(exists && mode === undefined
+        ? {
+            note:
+              'This platform has no POSIX permission bits; the file is governed by its access list. Check it with: icacls ' +
+              configPath,
+          }
+        : {}),
       readable,
       ...(configProblem ? { problem: configProblem } : {}),
     },
