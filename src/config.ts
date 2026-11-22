@@ -66,6 +66,32 @@ export interface AiSettings {
   allowParallel?: boolean;
 }
 
+/**
+ * The top-level keys the legacy shapes use. They are consumed by the
+ * migration and must not survive it: a file that still carries `provider`
+ * would otherwise have it read as a current preference.
+ */
+const LEGACY_TOP_LEVEL_KEYS = ['provider', 'providers', 'search', 'fetch', 'social'] as const;
+
+/**
+ * The AI permission switches, when the file carries the shape the reader
+ * expects. Anything else is dropped: a value nothing can read must not be
+ * carried into the file the next write produces.
+ */
+export function sanitizeAiSettings(value: unknown): AiSettings | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const settings: AiSettings = {};
+  for (const field of ['allowEngines', 'allowParallel'] as const) {
+    const parsed = coerceBoolean(value[field]);
+    if (parsed !== undefined) {
+      settings[field] = parsed;
+    }
+  }
+  return Object.keys(settings).length > 0 ? settings : undefined;
+}
+
 export interface ModsearchConfig {
   /** Engine for searching. Empty means: use the best one available here. */
   engine?: string;
@@ -302,7 +328,20 @@ export function migrateLegacyConfig(raw: ModsearchConfig & LegacyConfig): Modsea
       : undefined;
   const engine = hasLegacy ? raw.engine?.trim() || legacySearch || fromPin : raw.engine;
 
-  const config: ModsearchConfig = { engines };
+  // Everything the file carried, except the shapes this function consumes. A
+  // white-list rebuild dropped any top-level key it did not know about, and
+  // `config set` writes this result back: every save washed out the sections
+  // it did not recognise. The list of keys to keep now grows with the config
+  // instead of being silently cut.
+  //
+  // The spread copies own enumerable properties as data (CreateDataProperty),
+  // so a hand-written `__proto__` stays a key rather than reaching the
+  // prototype; Object.assign would have set the prototype instead.
+  const config = { ...raw } as ModsearchConfig & LegacyConfig;
+  for (const key of LEGACY_TOP_LEVEL_KEYS) {
+    delete (config as Record<string, unknown>)[key];
+  }
+  (config as Record<string, unknown>).engines = engines;
   if (engine !== undefined) {
     config.engine = engine;
   }
@@ -311,6 +350,15 @@ export function migrateLegacyConfig(raw: ModsearchConfig & LegacyConfig): Modsea
   }
   if (allowPrivateNetwork !== undefined) {
     config.allowPrivateNetwork = allowPrivateNetwork;
+  }
+  // The AI permission switches are the config's own section: keep them when
+  // they are the shape the reader expects, drop anything else rather than
+  // carrying a value nothing can read.
+  const ai = sanitizeAiSettings(raw.ai);
+  if (ai !== undefined) {
+    config.ai = ai;
+  } else {
+    delete (config as Record<string, unknown>).ai;
   }
   if (seenApiKeys.size > 0) {
     SEEN_API_KEYS.set(config, [...seenApiKeys]);

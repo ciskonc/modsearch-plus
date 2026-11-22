@@ -470,3 +470,76 @@ describe('config file', () => {
     expect(parsed.engine).toBe('agy (file)');
   });
 });
+
+describe('the migration keeps the sections it does not own', () => {
+  // `config set` writes the migrated result back, so a migration that rebuilds
+  // the file from a fixed list of keys washes out every section it did not
+  // know about — the AI permission switches were the first casualty: a save
+  // of any other key turned them off without saying so.
+  afterEach(() => cleanupTempDirs());
+
+  it('keeps the AI permission switches when another key is written', () => {
+    const p = tempConfigPath();
+    fs.writeFileSync(
+      p,
+      JSON.stringify({ ai: { allowEngines: true, allowParallel: true }, engines: {} }),
+    );
+    setConfigValue('tavily.apiKey', 'tvly-a', p);
+    const saved = JSON.parse(fs.readFileSync(p, 'utf-8'));
+    expect(saved.ai).toEqual({ allowEngines: true, allowParallel: true });
+    expect(saved.engines.tavily.apiKey).toBe('tvly-a');
+  });
+
+  it('keeps a top-level key it has never heard of', () => {
+    const p = tempConfigPath();
+    fs.writeFileSync(p, JSON.stringify({ experimental: { flag: true }, engines: {} }));
+    setConfigValue('cooldown', 'on', p);
+    const saved = JSON.parse(fs.readFileSync(p, 'utf-8'));
+    expect(saved.experimental).toEqual({ flag: true });
+    expect(saved.cooldown).toBe('on');
+  });
+
+  it('still consumes the legacy shapes instead of carrying them', () => {
+    const p = tempConfigPath();
+    fs.writeFileSync(
+      p,
+      JSON.stringify({
+        provider: 'tavily',
+        providers: { tavily: { apiKey: 'tvly-a' } },
+        search: { engine: 'exa' },
+        engines: {},
+      }),
+    );
+    setConfigValue('cooldown', 'on', p);
+    const saved = JSON.parse(fs.readFileSync(p, 'utf-8'));
+    expect(saved.provider).toBeUndefined();
+    expect(saved.providers).toBeUndefined();
+    expect(saved.search).toBeUndefined();
+    // The per-role shape outranks the v2 global one, and the key moved into
+    // the current place.
+    expect(saved.engine).toBe('exa');
+    expect(saved.engines.tavily.apiKey).toBe('tvly-a');
+  });
+
+  it('drops an AI section it cannot read instead of carrying it', () => {
+    const p = tempConfigPath();
+    fs.writeFileSync(p, JSON.stringify({ ai: 'yes', engines: {} }));
+    setConfigValue('cooldown', 'on', p);
+    const saved = JSON.parse(fs.readFileSync(p, 'utf-8'));
+    expect(saved.ai).toBeUndefined();
+  });
+
+  it('reads the AI switches the way the config show does', () => {
+    const migrated = migrateLegacyConfig({
+      ai: { allowEngines: true, allowParallel: 'true' },
+    } as never);
+    expect(migrated.ai).toEqual({ allowEngines: true, allowParallel: true });
+  });
+
+  it('keeps a hand-written __proto__ as data, not as the prototype', () => {
+    const migrated = migrateLegacyConfig(JSON.parse('{"__proto__":{"polluted":true}}') as never);
+    expect(Object.getPrototypeOf(migrated)).toBe(Object.prototype);
+    expect(Object.hasOwn(migrated, '__proto__')).toBe(true);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
