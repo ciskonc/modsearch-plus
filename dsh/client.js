@@ -423,43 +423,48 @@ window.__ModuleLoader__.load({
      * never on screen was never edited.
      */
     /**
-     * Every chain engine, ordered by the priority the config file holds.
+     * The whole chain, in the order a run walks it: the doctor's candidate
+     * list is that order (the pinned engine first, then the rest by the
+     * priority the config holds), including the engines that are not ready
+     * on this machine yet.
      *
-     * The priority is the authoritative order — the host sends it with every
-     * engine — so the card reads it directly instead of inferring the order
-     * from the doctor's candidate list. Inferring it meant the order on
-     * screen was a snapshot of the last doctor run: a save that changed the
-     * priorities left the rows showing the old arrangement, and the next
-     * drag wrote that old arrangement back to the file.
-     *
-     * Engines without a priority keep the documented order and come after
-     * the ones that have one, which is how a run walks them too.
+     * The priority the host sends with every engine is not the order to
+     * draw: a pinned engine sits first whatever its number says, so a list
+     * sorted by number would show an order a run does not take. The chain
+     * order is the one thing both the card and the run agree on.
      */
-    function fullOrder(summary) {
-      var rank = function (name) {
-        var index = CHAIN_ENGINES.indexOf(name);
-        return index < 0 ? CHAIN_ENGINES.length : index;
-      };
-      return CHAIN_ENGINES.slice().sort(function (a, b) {
-        var pa = summary.engines?.[a]?.priority;
-        var pb = summary.engines?.[b]?.priority;
-        var na = typeof pa === 'number' ? pa : Number.POSITIVE_INFINITY;
-        var nb = typeof pb === 'number' ? pb : Number.POSITIVE_INFINITY;
-        if (na !== nb) {
-          return na - nb;
+    function chainOrder(summary) {
+      var probes = Array.isArray(summary.readiness) ? summary.readiness : null;
+      if (probes === null) {
+        return CHAIN_ENGINES.slice();
+      }
+      var seen = {};
+      var order = [];
+      probes.forEach(function (entry) {
+        var name = canonicalChainName(entry && entry.engine);
+        if (!name || seen[name] || CHAIN_ENGINES.indexOf(name) < 0) {
+          return;
         }
-        return rank(a) - rank(b);
+        seen[name] = true;
+        order.push(name);
       });
+      // Engines the doctor did not mention still belong to the chain.
+      CHAIN_ENGINES.forEach(function (name) {
+        if (!seen[name]) {
+          order.push(name);
+        }
+      });
+      return order;
     }
 
     /**
-     * The engines the chain actually offers on this machine, in priority
-     * order: the ready ones, placed where the priorities put them.
+     * The engines the chain actually offers on this machine: the ready ones,
+     * in the chain order.
      */
     function chainEngines(summary) {
       var probes = Array.isArray(summary.readiness) ? summary.readiness : null;
       if (probes === null) {
-        return fullOrder(summary);
+        return chainOrder(summary);
       }
       var ready = {};
       probes.forEach(function (entry) {
@@ -467,7 +472,7 @@ window.__ModuleLoader__.load({
           ready[canonicalChainName(entry.engine)] = true;
         }
       });
-      return fullOrder(summary).filter(function (name) {
+      return chainOrder(summary).filter(function (name) {
         return ready[name] === true;
       });
     }
@@ -487,7 +492,7 @@ window.__ModuleLoader__.load({
      * quietly drop the slots of the engines the user cannot see.
      */
     function mergeOrder(summary, visibleOrder) {
-      var full = fullOrder(summary);
+      var full = chainOrder(summary);
       var visible = Array.isArray(visibleOrder) ? visibleOrder : [];
       var shown = {};
       visible.forEach(function (name) {
@@ -749,7 +754,21 @@ window.__ModuleLoader__.load({
             .then((r) => (r.ok ? r.json() : null))
             .then((fresh) => {
               if (fresh && Array.isArray(fresh.readiness)) {
-                summaryState[1](Object.assign({}, saved, { readiness: fresh.readiness }));
+                var merged = Object.assign({}, saved, { readiness: fresh.readiness });
+                summaryState[1](merged);
+                // The chain order comes from the doctor's list, so the rows on
+                // screen have to follow the fresh one: a save that reordered
+                // the chain is only visible once the new order is read back.
+                // The draft order is rebuilt from it, or the card would keep
+                // showing the order the save replaced.
+                draftState[1](function (draft) {
+                  if (!draft) {
+                    return draft;
+                  }
+                  return Object.assign({}, draft, {
+                    order: chainEngines(merged).slice(),
+                  });
+                });
               }
             })
             .catch(() => {});
@@ -1545,7 +1564,20 @@ window.__ModuleLoader__.load({
                           // probe below answers.
                           next.readiness = summary.readiness;
                           summaryState[1](next);
-                          draftState[1](nextDraft(next, next.engine));
+                          // The order the user just set stays on screen: the
+                          // answer holds the old readiness, and rebuilding the
+                          // draft from it would put the arrangement the save
+                          // replaced back on screen. The fresh chain that
+                          // follows tells the card the order a run takes now.
+                          draftState[1](function (previous) {
+                            var nextDraftValue = nextDraft(next, next.engine);
+                            if (!previous || !Array.isArray(previous.order)) {
+                              return nextDraftValue;
+                            }
+                            return Object.assign({}, nextDraftValue, {
+                              order: previous.order,
+                            });
+                          });
                           noteState[1](t.saved);
                           refreshReadiness(next);
                         })

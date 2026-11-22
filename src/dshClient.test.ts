@@ -725,17 +725,15 @@ describe('the automatic engine chain lists what this machine can actually search
     expect(numbers).toContain(1);
   });
 
-  it('orders the rows by the priority in the config, not by the built-in list', () => {
-    // The host sends every engine's priority with the summary. Reading the
-    // order from the doctor's candidate list instead made the screen show a
-    // snapshot of the last doctor run: a save that changed the priorities
-    // left the rows in the old arrangement, and the next drag wrote that old
-    // arrangement back.
+  it('orders the rows by the chain the doctor reports, not by the built-in list', () => {
+    // The doctor's candidate list is the order a run walks (the pinned engine
+    // first, then the rest by priority). A priority number alone is not that
+    // order, so the card reads the chain rather than sorting numbers.
     const summary = {
       ...SUMMARY,
       readiness: [
-        { engine: 'tavily', ready: true },
         { engine: 'exa', ready: true },
+        { engine: 'tavily', ready: true },
       ],
       engines: {
         ...SUMMARY.engines,
@@ -744,9 +742,9 @@ describe('the automatic engine chain lists what this machine can actually search
       },
     };
     const view = render(summary);
-    // tavily has the lower priority number, so it is the first row even
-    // though the built-in list puts exa first.
-    expect(view.chain.map((row) => row.label)).toEqual(['tavily', 'exa']);
+    // exa is first in the chain, so it is the first row even though the
+    // built-in list and the priority numbers put tavily first.
+    expect(view.chain.map((row) => row.label)).toEqual(['exa', 'tavily']);
   });
 
   it('saves the whole chain, so the engines that are not ready keep their slots', () => {
@@ -758,6 +756,7 @@ describe('the automatic engine chain lists what this machine can actually search
       ...SUMMARY,
       readiness: [
         { engine: 'tavily', ready: true },
+        { engine: 'keenable', ready: false },
         { engine: 'exa', ready: true },
       ],
       engines: {
@@ -769,35 +768,31 @@ describe('the automatic engine chain lists what this machine can actually search
     };
     const { nextDraft, savePayload } = evaluate({}).factory(() => ({})).__card;
     const draft = nextDraft(summary, 'tavily');
-    // The visible order is the two ready engines; the drag moves one.
+    // The visible order is the ready engines, in chain order.
     expect(draft.order).toEqual(['tavily', 'exa']);
     draft.order = ['exa', 'tavily'];
     const payload = savePayload(summary, draft);
     const order = payload.order as string[];
     // Every chain engine is in the payload, and keenable (not ready here)
-    // keeps the slot it held: third.
+    // keeps the slot it held: second.
     expect(order).toContain('keenable');
-    expect(order.indexOf('keenable')).toBe(2);
+    expect(order.indexOf('keenable')).toBe(1);
     expect(order.indexOf('exa')).toBe(0);
-    expect(order.indexOf('tavily')).toBe(1);
+    expect(order.indexOf('tavily')).toBe(2);
   });
 
-  it('derives the order from the priorities the save returned', () => {
-    // The save answers with the summary the host just wrote. Reading the
-    // order from those priorities is what makes the new arrangement show up
+  it('derives the order from the chain the save answered with', () => {
+    // The save answers with the summary the host just wrote, and the fresh
+    // doctor run that follows tells the card the order a run takes now.
+    // Reading the order from that is what makes a reordered chain show up
     // without waiting for a page refresh.
     const { nextDraft } = evaluate({}).factory(() => ({})).__card;
     const saved = {
       ...SUMMARY,
       readiness: [
-        { engine: 'tavily', ready: true },
         { engine: 'exa', ready: true },
+        { engine: 'tavily', ready: true },
       ],
-      engines: {
-        ...SUMMARY.engines,
-        tavily: { ...SUMMARY.engines.tavily, priority: 2 },
-        exa: { ...SUMMARY.engines.exa, priority: 1 },
-      },
     };
     expect(nextDraft(saved, 'tavily').order).toEqual(['exa', 'tavily']);
   });
