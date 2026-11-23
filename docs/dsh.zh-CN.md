@@ -36,7 +36,7 @@ npx -y @deepseek-ai/dsh --profile web --dump-config
 把插件装进实际启动的 profile。浏览器界面通常使用 `web`：
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.2
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.3
 ```
 
 安装后重启 dsh，再确认真正解析到的包：
@@ -71,7 +71,7 @@ dsh 插件不维护第二份引擎配置。它继承同一组环境变量，并�
 先跑离线体检：
 
 ```sh
-npx -y modsearch-plus@5.11.2 doctor
+npx -y modsearch-plus@5.11.3 doctor
 ```
 
 插件自带的 CLI 不在 `PATH` 里：它在装它的那个 profile 下，所以 `modsearch doctor` 要先把该 profile 的 `node_modules/.bin` 加进路径。不想动路径时，有两种跑法：
@@ -187,7 +187,7 @@ npx -y @deepseek-ai/dsh --profile web
 用当前精确版本刷新 profile 中记录的请求：
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile <name> add modsearch-plus@5.11.2
+npx -y @deepseek-ai/dsh plugin --profile <name> add modsearch-plus@5.11.3
 ```
 
 卸载命令：
