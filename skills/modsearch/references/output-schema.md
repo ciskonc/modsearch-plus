@@ -25,7 +25,7 @@ every run:
           "url": "https://nodejs.org/en/blog/release/v24.19.0",
           "snippet": "Krypton is the active LTS line.",
           "source": "nodejs.org",
-          "published_at": "2026-08-03"
+          "published_at": "2026-08-03T00:00:00Z"
         }
       ],
       "uncertainty": [],
@@ -95,15 +95,20 @@ notes out of `uncertainty` should read `warnings` now.
 for:
 
 - `ok`: the requested corpus answered. `source` equals `requestedSource`.
-- `degraded`: a stand-in corpus answered. Only X degrades today: when Grok Build
-  is missing, signed out, or failing, a web engine answers the X request. The
-  entry then reads `requestedSource: "x"`, `source: "web"`, `status: "degraded"`,
-  and `warnings` explains that web data cannot see inside X. Do not present a
-  degraded entry as X coverage.
-- `unavailable`: nothing could serve the source. `engine` is `null`, `items` is
-  empty, `attempts` lists every engine that was tried or skipped (empty when
-  routing found no engine to try), `durationSeconds` is `null`, and `warnings` says why. This appears for the X slot of a `--source web,x` run when X is
-  unreachable, so the slot is explicit rather than silently missing:
+- `degraded`: a stand-in corpus answered. Only X degrades today: when the grok
+  CLI is missing, not signed in, or failing, a web engine answers the X request.
+  The entry then reads `requestedSource: "x"`, `source: "web"`,
+  `status: "degraded"`, and `warnings` explains that web data cannot see inside
+  X — and names which of the three causes it was. Do not present a degraded
+  entry as X coverage.
+- `unavailable`: nothing could serve the source. Two shapes exist. When routing
+  found no engine at all, `engine` is `null`, `items` is empty,
+  `attempts` lists every engine that was tried or skipped, `durationSeconds` is
+  `null`, and `warnings` says why. When a fetch answered with a page that must
+  not be read as evidence (an HTTP 4xx/5xx status or zero readable text), the
+  engine that answered is named, `uncertainty` opens with "Treat this fetch as
+  failed" plus the true cause, and the body still carries whatever the server
+  answered with — the run exits non-zero so scripts can gate on it:
 
 ```json
 {
@@ -115,7 +120,7 @@ for:
   "items": [],
   "uncertainty": [],
   "warnings": [
-    "X itself was not reachable here (Grok Build missing, signed out, or failing), so this came from the public web, which cannot see inside X."
+    "X search is unavailable here because the grok CLI is not installed or not signed in on this machine (install it, then run: grok auth login). The web entry in this run is a separate source and does not stand in for X."
   ],
   "attempts": [],
   "durationSeconds": null

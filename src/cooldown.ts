@@ -10,11 +10,10 @@
 // through a temp file and an atomic rename so a crash mid-write cannot leave a
 // half-written file behind.
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { canonicalEngineName, cooldownEnabled, type ModsearchConfig } from './config.ts';
 import { ApiKeyFailureError } from './util/apiKeys.ts';
-import { modsearchDataDir } from './util/paths.ts';
+import { clipOnWord, modsearchDataDir } from './util/paths.ts';
 import { redactSecrets } from './util/redact.ts';
 
 export interface CooldownEntry {
@@ -361,7 +360,7 @@ export function recordQuotaCooldown(
   // cut lands on a word boundary with an ellipsis, so a truncated cause still
   // reads as a sentence instead of half a JSON object.
   const full = redactSecrets(error instanceof Error ? error.message : String(error));
-  const reason = full.length > 600 ? `${full.slice(0, 600)}…` : full;
+  const reason = clipOnWord(full, 600);
   const entry: CooldownEntry = {
     until: until.toISOString(),
     reason,

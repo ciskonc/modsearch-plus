@@ -503,20 +503,25 @@ function cliPath() {
 async function runCli(args, signal) {
   const cli = cliPath();
   const { stdout, stderr, code } = await run(process.execPath, [cli, ...args], signal, childEnv());
-  if (code !== 0) {
-    throw new Error(`modsearch failed (exit ${code}): ${(stderr || stdout).trim().slice(0, 500)}`);
-  }
   let parsed;
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    throw new Error(`modsearch produced no JSON: ${stdout.trim().slice(0, 300)}`);
+    // No envelope at all — a plain crash before any answer. The exit code and
+    // stderr carry the cause. A nonzero exit alone is not that: a fetch of a
+    // 404 or an empty shell now exits 1 while still answering as an envelope,
+    // and its page text must reach the caller instead of dying as an error.
+    throw new Error(`modsearch failed (exit ${code}): ${(stderr || stdout).trim().slice(0, 500)}`);
   }
   const entry = Array.isArray(parsed.results) ? parsed.results[0] : undefined;
   if (!entry || typeof entry.summary !== 'string') {
     throw new Error('modsearch returned an envelope without a usable source entry');
   }
-  if (entry.status === 'unavailable') {
+  if (entry.status === 'unavailable' && parsed.mode !== 'fetch') {
+    // Nothing answered and there is no page text to fall back on. A fetch
+    // keeps going: its uncertainty opens with "Treat this fetch as failed"
+    // and the body still carries whatever the server answered with, which the
+    // caller needs to see rather than an error in its place.
     const attempts = (Array.isArray(entry.attempts) ? entry.attempts : [])
       .map((attempt) => `${attempt.engine}: ${attempt.error ?? 'skipped'}`)
       .join('; ');

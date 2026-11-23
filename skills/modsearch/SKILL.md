@@ -61,7 +61,7 @@ modsearch -u "<url>"                   # fetch one page
 modsearch -u "<url>" -q "<focus>"      # fetch with an extraction focus
 ```
 
-Optional flags: `-o <file>` also writes the JSON, `--timeout <ms>` raises the time budget, and `-e <engine>` forces exactly one engine with no fallback, so leave it off unless the user wants one specific engine. The full flag table, with defaults and the config commands, is in `references/cli.md`.
+Optional flags: `-o <file>` writes the JSON to a file (stdout then carries a one-line receipt instead), `--timeout <ms>` raises the time budget, and `-e <engine>` forces exactly one engine with no fallback, so leave it off unless the user wants one specific engine. The full flag table, with defaults and the config commands, is in `references/cli.md`.
 
 An X-flavored query (twitter, tweet, 推特, 推文, x.com, "on X") goes to X on its own, and only to X, because a web index cannot see inside X. Pass `--source web,x` when the user wants both.
 

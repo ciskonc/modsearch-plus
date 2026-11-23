@@ -10,7 +10,6 @@
 // and writes go through a temp file and an atomic rename.
 import * as fs from 'fs';
 import { modsearchDataDir } from './paths.ts';
-import * as os from 'os';
 import * as path from 'path';
 import { canonicalEngineName } from '../config.ts';
 import { redactSecrets } from './redact.ts';

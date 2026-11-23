@@ -23,7 +23,8 @@ import { MAX_CONTENT_CHARS } from './limits.ts';
 
 const DEFAULT_MAX_RESULTS = 10;
 /** Keenable rejects max_results outside 1-50. */
-const MAX_RESULTS_CEILING = 50;const KEENABLE_DEFAULT_BASE = 'https://api.keenable.ai';
+const MAX_RESULTS_CEILING = 50;
+const KEENABLE_DEFAULT_BASE = 'https://api.keenable.ai';
 /** Required on keyless calls: how Keenable attributes anonymous traffic. */
 const APP_TITLE = 'modsearch';
 /** Keenable rejects a fetch `prompt` longer than this. */

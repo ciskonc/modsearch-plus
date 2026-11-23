@@ -41,6 +41,8 @@ Sign-in cannot be done non-interactively: ask the user to run `agy` once themsel
 
 `~/.modsearch/config.json`, written 0600, keys masked when shown. Precedence: CLI flags > environment variables > this file > built-in defaults.
 
+`MODSEARCH_HOME` moves both data files (`config.json` and `state.json`) into one directory — set it to isolate an e2e run or a second instance from the operator's real files (`os.homedir()` follows `USERPROFILE`, which a redirected `DSH_HOME` does not touch, so the dsh host reads the same variable and both halves stay together).
+
 ```bash
 modsearch config init     # starter file, every field optional
 modsearch config show     # effective config: file + env merged, each value tagged (file)/(env), keys masked, alias keys shown canonical

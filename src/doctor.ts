@@ -33,6 +33,7 @@ import { grokAuthFile } from './providers/grok.ts';
 import { findEngine, ROLE_PREFERENCE, type SearchEngine } from './providers/index.ts';
 import { commandOnPath } from './system.ts';
 import { splitApiKeys } from './util/apiKeys.ts';
+import { clipOnWord } from './util/paths.ts';
 
 /** The Node floor this build promises. Kept in step with package.json engines. */
 export const MIN_NODE = '22.13.0';
@@ -480,16 +481,15 @@ function diagnoseCooldown(
     const target = parseCooldownStateKey(stateKey);
     const entry = coolingEntry(state, target.engine, now, target.keyIndex);
     if (entry) {
-      // The reason can carry a JSON error body: cut on a wide bound with an
-      // ellipsis rather than slicing mid-word, so a truncated cause still
+      // The reason can carry a JSON error body: cut on a word boundary with
+      // an ellipsis rather than slicing mid-word, so a truncated cause still
       // reads as a sentence.
-      const firstLine = entry.reason.split('\n')[0];
       engines.push({
         engine: target.engine,
         ...(target.keyIndex === undefined ? {} : { keyIndex: target.keyIndex }),
         until: entry.until,
         remaining: formatRemaining(Date.parse(entry.until) - now.getTime()),
-        reason: firstLine.length > 400 ? `${firstLine.slice(0, 400)}…` : firstLine,
+        reason: clipOnWord(entry.reason.split('\n')[0], 400),
       });
     }
   }

@@ -38,20 +38,40 @@ export function normalizePublishedAt(value: unknown): string | undefined {
     const ms = Date.parse(zoned);
     if (Number.isFinite(ms)) date = new Date(ms);
   } else if (typeof value === 'number' && Number.isFinite(value)) {
-    date = new Date(value < 1e12 ? value * 1000 : value);
+    // Below 1e11 a number can only be epoch seconds (1e11 s is the year 5138,
+    // while 1e11 ms is 1973): the millennium gap makes the read unambiguous
+    // for any real timestamp.
+    date = new Date(value < 1e11 ? value * 1000 : value);
   }
   if (!date || Number.isNaN(date.getTime())) return undefined;
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
 /**
- * Collapse the URL spellings that are provably the same page: fragment-only
- * variants (same document scrolled), trailing-slash variants, and an explicit
- * `www.` host alias. Query strings are kept verbatim — `?tab=` or `?id=`
- * genuinely select different content, so merging them would drop evidence.
- * Regional subdomains (us.example.com) are different sites, also untouched.
- * Unparseable URLs keep their literal form as the key. Null says "no usable
- * key"; callers fall back to their raw URL.
+ * Cut long evidence text (a vendor error body, a cooldown reason) on a word
+ * boundary with an ellipsis, so a truncated cause still reads as a sentence —
+ * a hard slice used to leave half a JSON object ("…"resets_at":"2026-11) in
+ * user-facing text. Prefer the last space inside the budget; without one,
+ * cut at the budget and mark it anyway.
+ */
+export function clipOnWord(text: string, limit: number): string {
+  if (text.length <= limit) {
+    return text;
+  }
+  const cut = text.slice(0, limit);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${lastSpace > Math.floor(limit * 0.6) ? cut.slice(0, lastSpace) : cut}…`;
+}
+
+/**
+ * Collapse the URL spellings of one page: fragment-only variants (same
+ * document scrolled), trailing-slash variants, and an explicit `www.` host
+ * alias. The scheme and any explicit port stay in the key — http and https
+ * (or :8080) can serve genuinely different content, and merging them would
+ * drop evidence. Query strings are also kept verbatim: `?tab=` or `?id=`
+ * select different content. Regional subdomains (us.example.com) are
+ * different sites, untouched. Unparseable URLs keep their literal form as
+ * the key. Null says "no usable key"; callers fall back to their raw URL.
  */
 export function canonicalUrlKey(url: string): string | null {
   try {
@@ -64,7 +84,7 @@ export function canonicalUrlKey(url: string): string | null {
     if (pathname.length > 1) {
       pathname = pathname.replace(/\/+$/, '');
     }
-    return `${parsed.hostname}${pathname}${parsed.search}`;
+    return `${parsed.protocol}//${parsed.host}${pathname}${parsed.search}`;
   } catch {
     return null;
   }
@@ -74,12 +94,17 @@ export function canonicalUrlKey(url: string): string | null {
  * Keep the first item per canonical URL and drop later variants of the same
  * page. The first occurrence wins because fusion and engine output already
  * rank it: a variant that shows up later is a duplicate wearing a different
- * spelling. Items without a usable URL pass through untouched.
+ * spelling. Items without a usable URL pass through untouched, as does
+ * anything that is not an item at all (a null slot in a sparse array).
  */
 export function dedupeUrlVariants<T extends { url?: unknown }>(items: T[]): T[] {
   const seen = new Set<string>();
   const kept: T[] = [];
   for (const item of items) {
+    if (!item || typeof item !== 'object') {
+      kept.push(item);
+      continue;
+    }
     const url = typeof item.url === 'string' ? item.url : '';
     const key = url !== '' ? canonicalUrlKey(url) : null;
     if (key !== null) {

@@ -114,19 +114,24 @@ function restoreEnv(key: string, value: string | undefined): void {
 /**
  * Point the home directory at a throwaway dir for the duration of a test.
  * `os.homedir()` reads HOME on POSIX and USERPROFILE on Windows, so redirect
- * both for a test home that holds on every platform.
+ * both for a test home that holds on every platform. MODSEARCH_HOME goes too:
+ * an exported one would redirect the data files out of the throwaway home and
+ * make a test's outcome depend on the caller's environment.
  */
 export function withTempHome(): { home: string; restore: () => void } {
   const home = tempDir('modsearch-home-');
   const realHome = process.env.HOME;
   const realUserProfile = process.env.USERPROFILE;
+  const realModsearchHome = process.env.MODSEARCH_HOME;
   process.env.HOME = home;
   process.env.USERPROFILE = home;
+  delete process.env.MODSEARCH_HOME;
   return {
     home,
     restore: () => {
       restoreEnv('HOME', realHome);
       restoreEnv('USERPROFILE', realUserProfile);
+      restoreEnv('MODSEARCH_HOME', realModsearchHome);
     },
   };
 }

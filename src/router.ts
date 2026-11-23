@@ -17,6 +17,7 @@ import {
   type Source,
 } from './providers/index.ts';
 import { splitApiKeys } from './util/apiKeys.ts';
+import { clipOnWord } from './util/paths.ts';
 
 /** One run's cooldown snapshot: which engines are cooling, judged against `now`. */
 export interface CooldownView {
@@ -63,7 +64,8 @@ export function xUnavailableNote(config: ModsearchConfig, env: NodeJS.ProcessEnv
  * The one true cause X could not be searched, read from the same facts doctor
  * reports (engine shipped? binary and login file present?), not a three-way
  * guess. The tool is the grok CLI — the "Grok Build" model-bundle name never
- * appears, so nobody installs a model when they need a CLI.
+ * appears, so nobody installs a model when they need a CLI. "could not
+ * answer" covers both a run that failed and one that never started.
  */
 function xDegradeCause(config: ModsearchConfig, env: NodeJS.ProcessEnv): string {
   const grok = findEngine('grok-cli');
@@ -74,7 +76,7 @@ function xDegradeCause(config: ModsearchConfig, env: NodeJS.ProcessEnv): string 
   if (!grok.isAvailable(settings, env, 'social')) {
     return 'the grok CLI is not installed or not signed in on this machine (install it, then run: grok auth login)';
   }
-  return 'the grok CLI failed to answer this query';
+  return 'the grok CLI could not answer this query';
 }
 
 export interface SourcePlan {
@@ -268,7 +270,7 @@ function reorderByCooldown(
     const entry = coolingEngineEntry(cooldown.state, engine.name, keyCount, cooldown.now);
     if (entry) {
       cooling.push(engine);
-      const reason = entry.reason.split('\n')[0].slice(0, 140);
+      const reason = clipOnWord(entry.reason.split('\n')[0], 200);
       notes.push(
         `The ${engine.name} engine is cooling until ${entry.until}, so it moves to the back of the fallback chain.${reason ? ` Reason: ${reason}` : ''}`,
       );

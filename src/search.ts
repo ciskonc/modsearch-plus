@@ -352,7 +352,13 @@ async function runParallelSearch(context: {
     const hint = explicitList
       ? `No engine from the list could serve the parallel run.`
       : `No engine is flagged for parallel search. Tick engines in the settings card, or run: modsearch config set <engine>.parallel true`;
-    throw new SourceRunError(`Parallel search has no engines to run. ${hint}`, []);
+    // The plan notes name what was dropped and why (a typo, a role mismatch):
+    // without them an all-typo parallel run reads as a bare "no engines" with
+    // no cause, which is the exact gap the serial path closed.
+    throw new SourceRunError(
+      [`Parallel search has no engines to run. ${hint}`, ...planNotes].join('\n'),
+      [],
+    );
   }
 
   // One attempt per engine: the first configured key, its own timeout budget.
@@ -870,7 +876,10 @@ async function withinTime<T>(engineName: string, work: Promise<T>, ms: number): 
       () =>
         reject(
           new Error(
-            `The run-wide deadline ran out before ${engineName} finished (after ${Math.round(ms)} ms).`,
+            // Neutral on purpose: this budget is the engine's own timeout or
+            // the run-wide deadline, whichever fired first — withinTime only
+            // knows which one arrived, not which one was meant.
+            `${engineName} did not finish within its budget (${Math.round(ms)} ms).`,
           ),
         ),
       ms,

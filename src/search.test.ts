@@ -606,7 +606,7 @@ describeSpawn('a run deadline bounds the whole chain', () => {
     });
 
     const firecrawl = error.attempts.find((attempt) => attempt.engine === 'firecrawl');
-    const capped = Number(/after (\d+) ms/.exec(firecrawl?.error ?? '')?.[1]);
+    const capped = Number(/budget \((\d+) ms\)/.exec(firecrawl?.error ?? '')?.[1]);
     expect(capped).toBeGreaterThan(0);
     expect(capped).toBeLessThanOrEqual(6_000);
   }, 20_000);

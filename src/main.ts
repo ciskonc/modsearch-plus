@@ -6,7 +6,6 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  CONFIG_PATH,
   currentConfigPath,
   initConfigFile,
   describeIgnoredProjectFields,
@@ -100,10 +99,15 @@ program
       if (!Number.isFinite(maxResults) || maxResults <= 0) {
         throw new Error('Invalid --max-results. Use a positive integer.');
       }
+      // The cap is real, not a notice: engines differ in their own ceilings
+      // (some hard-reject larger counts with a 400), so the run carries the
+      // capped number and stderr says the ask was reduced.
+      let effectiveMaxResults = maxResults;
       if (maxResults > MAX_RESULTS_CEILING) {
+        effectiveMaxResults = MAX_RESULTS_CEILING;
         await writeFully(
           process.stderr,
-          `Note: --max-results ${maxResults} is capped at ${MAX_RESULTS_CEILING}; no engine returns more than ${MAX_RESULTS_CEILING} results.\n`,
+          `Note: --max-results ${maxResults} was reduced to ${MAX_RESULTS_CEILING}; no engine returns more than ${MAX_RESULTS_CEILING} results.\n`,
         );
       }
 
@@ -127,7 +131,7 @@ program
         // Count the deadline from process start, so Node startup and config
         // loading come out of the budget the caller is holding.
         deadlineStartedAt: performance.timeOrigin,
-        maxResults,
+        maxResults: effectiveMaxResults,
         workdir: options.workdir,
         allowPrivateNetwork: options.allowPrivateNetwork,
         config,
@@ -166,7 +170,7 @@ program
       const message = error instanceof Error ? error.message : String(error);
       // The engine roster belongs on engine problems only: appending it to a
       // bad --max-results read as advice nobody asked for.
-      const lines = /engine/i.test(message)
+      const lines = /engine/i.test(message) && !message.includes('Known engines')
         ? [`Error: ${message}`, `Known engines: ${listEngines().join(', ')}`]
         : [`Error: ${message}`];
       await writeFully(process.stderr, `${lines.join('\n')}\n`);
@@ -268,6 +272,7 @@ config
 
 config
   .command('show')
+  .alias('get')
   .description('Print the effective config (file + env, source-tagged) with API keys masked')
   .action(() => {
     try {
