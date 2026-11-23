@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 5.11.2 - 2026-11-23
+
+- An all-failed parallel run answers as a JSON envelope instead of a plain error: `status: "unavailable"`, the attempts inside, parseable regardless. Parallel is the mode most likely to fail everywhere at once — paid engines run out together — and the caller parses the output as JSON regardless.
+- An engine named in the request but dropped from the chain is named in the warnings first, with the reason: it changes what the run covered and what it billed. A typo used to silently halve the run.
+- A Firecrawl key that was answered by the keyless pool carries the reset time the vendor named into its cooldown, so the recorded cooldown lands on the real reset (Firecrawl answers a spent allowance with `resets_at`) instead of the default 45-minute window. The keyless fallback itself is unchanged.
+- An agent-loop CLI that needs a browser sign-in holds the engine for an hour after one failure, instead of sitting out its whole attempt timeout on every run. Antigravity with a lapsed login used to spend 76 seconds of a 96-second fetch waiting for a login prompt nobody can answer.
+- An empty Firecrawl scrape says the fetch failed rather than dressing itself up as a sparse page: "Treat this fetch as failed" where "the page may be genuinely sparse" used to be all a nonexistent domain earned.
+- `doctor` says what a green verdict does not mean — the key is read, not tested — and no longer reports POSIX permission bits on Windows, where every file reads back 666 while the access is governed by its ACL. The dsh tool descriptions also list every search engine the CLI accepts, and the doctor command they suggest is the one that runs.
+
 ## 5.11.1 - 2026-11-23
 
 - Upstream 5.10.13 and 5.10.14 are merged in. Keenable reads pages again, so the fetch chain has a second keyless cloud engine; a spent keyless allowance is held in cooldown until its reset instead of a flat window; a project `.modsearch/config.json` can narrow the user file; and the bin path lost its `./` prefix.
