@@ -1003,3 +1003,31 @@ describeSpawn('routing facts cannot be faked by an engine', () => {
     expect(result.results[0].durationSeconds).toBeLessThan(100);
   }, 30_000);
 });
+
+describe('a parallel run that fails everywhere still answers as JSON', () => {
+  // Parallel is the mode most likely to fail everywhere at once (paid engines
+  // run out together). The caller parses the output as JSON regardless, so an
+  // all-failed run is an envelope with the attempts inside, not a plain error.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns an unavailable entry with the attempts, and no cooldown writes', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('offline unit test');
+    });
+    const result = await runSearch({
+      query: 'anything',
+      parallel: true,
+      config: { engines: { firecrawl: { parallel: true } } },
+      env: BARE_ENV,
+      timeoutMs: 5_000,
+    });
+    const entry = result.results[0];
+    expect(entry.status).toBe('unavailable');
+    expect(entry.engine).toBe(null);
+    expect(Array.isArray(entry.attempts)).toBe(true);
+    expect((entry.attempts as unknown[]).length).toBeGreaterThan(0);
+    expect((entry.warnings as string[]).join(' ')).toContain('failed');
+  });
+});

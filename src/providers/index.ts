@@ -60,7 +60,7 @@ export interface EngineOutput {
      * layer has to keep it out of the chain instead of clearing its cooldown
      * because this call succeeded.
      */
-    keyFailure?: { message: string };
+    keyFailure?: { message: string; resetAt?: number };
   };
 }
 

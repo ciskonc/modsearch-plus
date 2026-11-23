@@ -230,9 +230,17 @@ export async function runSearch(options: RunSearchOptions): Promise<RunSearchRes
 
   // Parallel mode is a search-only shape: one query fanned out across several
   // engines at once, fused into a single entry. Everything else keeps the
-  // serial failover path below, untouched.
+  // serial failover path below, untouched. A run where every engine failed is
+  // still an envelope — parallel is the mode most likely to fail everywhere at
+  // once (paid engines run out together), and the caller parses the output as
+  // JSON regardless.
   if (options.parallel === true && mode === 'search') {
-    const result = await runParallelSearch(context);
+    let result: SourceResult;
+    try {
+      result = await runParallelSearch(context);
+    } catch (error) {
+      result = failedSourceEntry(plans[0], error);
+    }
     return {
       mode,
       query: query ?? null,
@@ -311,10 +319,15 @@ async function runParallelSearch(context: {
   // The plan gives the availability-filtered search chain; the parallel set
   // is the explicit list when given, else the whitelist slice of that chain.
   const plans = planRun({ mode, query, config, requestedEngine: options.engine, env });
-  const chain = (plans.find((plan) => plan.source === 'web')?.engine
-    ? [plans.find((plan) => plan.source === 'web')!.engine!, ...plans[0].fallbacks]
+  const webPlan = plans.find((plan) => plan.source === 'web');
+  const chain = (webPlan?.engine
+    ? [webPlan.engine!, ...plans[0].fallbacks]
     : []
   ).filter(Boolean) as SearchEngine[];
+  // An engine named in the request but dropped from the chain is a fact the
+  // caller needs: it changes what the run covered and what it billed. The
+  // notes carry why each one was dropped.
+  const planNotes = webPlan?.notes ?? [];
 
   const explicitList = options.engine?.trim();
   const set = explicitList
@@ -396,11 +409,16 @@ async function runParallelSearch(context: {
     maxResults,
   );
 
-  const warnings = outcomes.map((outcome) =>
-    outcome.ok
-      ? `The ${outcome.engine.name} engine answered in ${outcome.durationSeconds.toFixed(1)}s.`
-      : `The ${outcome.engine.name} engine failed: ${outcome.error}`,
-  );
+  const warnings = [
+    // An engine the caller asked for but the chain dropped is the first thing
+    // to know: it changes what the run covered and what it billed.
+    ...planNotes,
+    ...outcomes.map((outcome) =>
+      outcome.ok
+        ? `The ${outcome.engine.name} engine answered in ${outcome.durationSeconds.toFixed(1)}s.`
+        : `The ${outcome.engine.name} engine failed: ${outcome.error}`,
+    ),
+  ];
 
   return {
     source: 'web',
@@ -636,9 +654,16 @@ async function runOneSource(
     // then the key is still out of credit, and clearing its cooldown would put
     // it back at the front of the chain to be refused again next run.
     if (output.meta.keyFailure) {
+      // The failure carries the vendor's reset time when it has one, so the
+      // recorded cooldown lands on the real reset rather than the default
+      // window — the same precision a direct failure would have had.
+      const failure = new ApiKeyFailureError(output.meta.keyFailure.message);
+      if (typeof output.meta.keyFailure.resetAt === 'number') {
+        Object.assign(failure, { resetAt: output.meta.keyFailure.resetAt });
+      }
       const entry = controller?.record(
         engine.name,
-        new ApiKeyFailureError(output.meta.keyFailure.message),
+        failure,
         successfulKeyIndex,
       );
       if (entry) {

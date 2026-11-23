@@ -73,6 +73,16 @@ export const MONTHLY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const REGION_LOCKED =
   /eligibility check failed|not (?:currently )?available in your (?:location|region|country)/i;
 
+/**
+ * An agent-loop CLI that needs a one-time browser sign-in and has none: every
+ * call would sit out its whole timeout waiting for a login prompt nobody can
+ * answer (subprocess print mode cannot show one), so the failure is held for
+ * an hour instead of re-paid every run. Antigravity times out this way when
+ * its auth has lapsed.
+ */
+const AGENT_LOGIN_REQUIRED =
+  /(?:auth|sign.?in).{0,40}(?:failed|required|expired|lapsed)|not signed in|login (?:prompt|link)/i;
+
 export function emptyCooldownState(): CooldownState {
   return { engineCooldowns: {} };
 }
@@ -280,6 +290,11 @@ export function classifyQuota(error: unknown, now: Date): Date | null {
   const message = error instanceof Error ? error.message : String(error);
   if (REGION_LOCKED.test(message)) {
     return new Date(now.getTime() + MONTHLY_COOLDOWN_MS);
+  }
+  // A pending sign-in holds the engine for an hour: the failure costs the full
+  // attempt timeout, and the user has to sign in themselves either way.
+  if (AGENT_LOGIN_REQUIRED.test(message)) {
+    return new Date(now.getTime() + 60 * 60_000);
   }
   const looksRateLimited = /rate.?limit|too many requests|\b429\b/i.test(message);
   // Tavily's monthly plan cap (432) and PAYGO cap (433) are a spent monthly
