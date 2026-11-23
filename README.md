@@ -69,7 +69,7 @@ Keyed engines accept comma-separated multiple keys — Tavily, Exa, Firecrawl, K
 <summary>DeepSeek Harness (recommended)</summary>
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.2
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.3
 ```
 
 In the desktop app, enter `modsearch-plus` in the Add plugin dialog instead. On dsh releases before 0.1.6-alpha.2, the settings card lives under Settings → Plugins → Plugin config.

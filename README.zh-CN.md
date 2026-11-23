@@ -69,7 +69,7 @@ Tavily、Exa、Firecrawl、Keenable、MiniMax、MiniMax websearch、Zhipu（智�
 <summary>DeepSeek Harness（推荐）</summary>
 
 ```sh
-npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.2
+npx -y @deepseek-ai/dsh plugin --profile web add modsearch-plus@5.11.3
 ```
 
 桌面应用在 Add plugin 对话框中输入 `modsearch-plus`。0.1.6-alpha.2 之前的 dsh 版本，设置卡片位于 Settings → Plugins → Plugin config。

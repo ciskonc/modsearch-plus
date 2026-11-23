@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 5.11.3 - 2026-11-23
 
 - A fetch that came back as an HTTP error page or an empty shell says so in the shape a caller can act on. A 404 used to report `status: "ok"`, exit code 0, and an uncertainty line blaming JavaScript rendering for what was really a missing page; an empty JS-rendered shell said "very little text came back" and stopped there. Now every fetch engine declares a structured failure (`meta.fetchFailure`), the source reads `status: "unavailable"`, the uncertainty opens with "Treat this fetch as failed" and the true HTTP cause, and a `-u` run exits 1 — so a script or a model cannot file an empty page as a successful read. The sparse-but-nonempty verdict lost its false JavaScript accusation: example.com was being called probably-rendered-by-JavaScript for being short.
 - A parallel run reads the same cooldown state the serial run does. The parallel planner dropped the cooldown snapshot on the floor, so an engine cooling with 18 hours left on its spent key was called for real, silently, while the same run in serial mode correctly moved it to the back of the chain.
