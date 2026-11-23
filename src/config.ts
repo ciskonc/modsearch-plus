@@ -5,6 +5,7 @@ import * as path from 'path';
 // (its config import is type-only), so this does not create an import cycle.
 import { findEngine, listEngines } from './providers/index.ts';
 import { splitApiKeys } from './util/apiKeys.ts';
+import { modsearchDataDir } from './util/paths.ts';
 import { maskUrlCredentials, redactSecrets } from './util/redact.ts';
 
 // Layered configuration: CLI flags > environment variables > ~/.modsearch/config.json > built-ins.
@@ -120,9 +121,9 @@ interface LegacyRoleConfig {
 export const CONFIG_DIR = path.join(os.homedir(), '.modsearch');
 export const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
-/** Resolved at call time so a faked HOME (tests) redirects the config too. */
+/** Resolved at call time so a faked HOME (tests) or MODSEARCH_HOME redirects the config too. */
 export function currentConfigPath(): string {
-  return path.join(os.homedir(), '.modsearch', 'config.json');
+  return path.join(modsearchDataDir(), 'config.json');
 }
 
 type StringEngineSetting = 'apiKey' | 'model' | 'bin' | 'baseURL';
@@ -749,9 +750,17 @@ export function setConfigValue(
     }
     if (field === 'priority') {
       const parsed = Number.parseInt(value.trim(), 10);
+      // A priority of 0 or less is meaningless in the sort (chain positions
+      // start at 1) and used to write through silently, leaving a value no
+      // reader would produce.
       if (!Number.isFinite(parsed) || String(parsed) !== value.trim()) {
         throw new Error(
           `Invalid priority: ${value}. Use a whole number; smaller sorts earlier in the automatic chain.`,
+        );
+      }
+      if (parsed < 1) {
+        throw new Error(
+          `Invalid priority: ${value}. Use a whole number of 1 or more; smaller sorts earlier in the automatic chain.`,
         );
       }
       config.engines ??= {};

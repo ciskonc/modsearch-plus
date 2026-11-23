@@ -120,6 +120,7 @@ window.__ModuleLoader__.load({
         // either can be dropped without touching the rest of the card.
         socialOnly: 'X search only',
         keylessTier: 'Runs on the keyless free tier by default. Add a key to raise the quota.',
+        noKey: 'no key configured',
         loadFailed: 'load failed',
         saveFailed: 'save failed',
         retry: 'Retry',
@@ -184,6 +185,7 @@ window.__ModuleLoader__.load({
         autoEmpty: '本机暂无就绪的引擎。',
         socialOnly: '仅 X 搜索',
         keylessTier: '默认使用免注册的免费额度，填入密钥可提高配额。',
+        noKey: '未配置密钥',
         loadFailed: '加载失败',
         saveFailed: '保存失败',
         retry: '重试',
@@ -641,6 +643,16 @@ window.__ModuleLoader__.load({
     // helpers below hand back nothing and labels() takes its old path.
     function ConfigCard(react, ui, localeRef) {
       var h = react.createElement;
+      // Cut on a word boundary with an ellipsis, so a truncated error still
+      // reads as a sentence — a hard slice used to leave half a JSON object
+      // in the traffic light's aria-label.
+      var clipText = function (text, limit) {
+        var s = String(text == null ? '' : text);
+        if (s.length <= limit) return s;
+        var cut = s.slice(0, limit);
+        var lastSpace = cut.lastIndexOf(' ');
+        return (lastSpace > Math.floor(limit * 0.6) ? cut.slice(0, lastSpace) : cut) + '…';
+      };
       var Input = ui.Input;
 
       // Built once per card so useSyncExternalStore is not handed a new
@@ -1004,8 +1016,19 @@ window.__ModuleLoader__.load({
                 (record
                   ? record.ok
                     ? t.trafficGreen
-                    : `${t.trafficRed}${record.error ? `: ${String(record.error).slice(0, 140)}` : ''}`
+                    : `${t.trafficRed}${record.error ? `: ${clipText(record.error, 140)}` : ''}`
                   : t.trafficGrey) + (record?.at ? ` · ${record.at}` : '');
+              // An engine that eats a key and has none reads as ready to the
+              // eye — the row sits in the chain like every configured one. The
+              // badge names the gap: this engine will fail over away until a
+              // key is set. Keyless engines (and the CLI tools, which take no
+              // key) never wear it.
+              const missingKey =
+                KEYLESS_ENGINES.indexOf(name) < 0 &&
+                name !== 'local' &&
+                name !== 'antigravity-cli' &&
+                name !== 'grok-cli' &&
+                summary.engines?.[name]?.hasKey !== true;
               // Both ticks carry a visible label: a bare box beside another
               // box reads as a duplicate, and "which one is which" is exactly
               // the thing the row has to answer.
@@ -1170,7 +1193,29 @@ window.__ModuleLoader__.load({
                     background: color, display: 'inline-block',
                   },
                 }),
-                h('span', { style: { flex: 'none', minWidth: '130px' } }, name),
+                h(
+                  'span',
+                  { style: { flex: 'none', minWidth: '130px', display: 'inline-flex', alignItems: 'center', gap: '6px' } },
+                  name,
+                  missingKey
+                    ? h(
+                        'span',
+                        {
+                          title: t.noKey,
+                          style: {
+                            flex: 'none',
+                            fontSize: '10px',
+                            lineHeight: '14px',
+                            padding: '0 5px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--dsw-alias-border-l2, rgba(127,127,127,0.35))',
+                            color: 'var(--dsw-alias-label-tertiary, rgba(127,127,127,0.8))',
+                          },
+                        },
+                        t.noKey,
+                      )
+                    : null,
+                ),
                 // The channel select rides on the row's right side with the
                 // ticks: one row, one decision about Zhipu.
                 zhipuMode,

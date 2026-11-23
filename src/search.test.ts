@@ -408,9 +408,9 @@ describeSpawn('X degrade is labeled, never silently mislabeled', () => {
     expect(entry.requestedSource).toBe('x');
     expect(entry.status).toBe('degraded');
     expect(entry.engine).toBe('antigravity-cli');
-    expect((entry.warnings as string[]).join(' ')).toContain('X itself was not reachable');
+    expect((entry.warnings as string[]).join(' ')).toContain('X search fell back to the public web');
     // The degrade reason is a routing warning, not epistemic uncertainty.
-    expect((entry.uncertainty as string[]).join(' ')).not.toContain('X itself was not reachable');
+    expect((entry.uncertainty as string[]).join(' ')).not.toContain('X search fell back to the public web');
   }, 30_000);
 
   it('emits an explicit empty unavailable X entry for web,x when X is unreachable', async () => {
@@ -435,7 +435,7 @@ describeSpawn('X degrade is labeled, never silently mislabeled', () => {
     expect(x.items).toEqual([]);
     expect(x.attempts).toEqual([]);
     expect(x.uncertainty as string[]).toEqual([]);
-    expect((x.warnings as string[]).join(' ')).toContain('X itself was not reachable');
+    expect((x.warnings as string[]).join(' ')).toContain('X search is unavailable here');
   }, 30_000);
 });
 
@@ -606,7 +606,7 @@ describeSpawn('a run deadline bounds the whole chain', () => {
     });
 
     const firecrawl = error.attempts.find((attempt) => attempt.engine === 'firecrawl');
-    const capped = Number(/timed out after (\d+) ms/.exec(firecrawl?.error ?? '')?.[1]);
+    const capped = Number(/after (\d+) ms/.exec(firecrawl?.error ?? '')?.[1]);
     expect(capped).toBeGreaterThan(0);
     expect(capped).toBeLessThanOrEqual(6_000);
   }, 20_000);

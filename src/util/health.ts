@@ -9,6 +9,7 @@
 // ~/.modsearch/state.json, a corrupt or unreadable file reads as no history,
 // and writes go through a temp file and an atomic rename.
 import * as fs from 'fs';
+import { modsearchDataDir } from './paths.ts';
 import * as os from 'os';
 import * as path from 'path';
 import { canonicalEngineName } from '../config.ts';
@@ -30,7 +31,7 @@ export interface HealthState {
 }
 
 export function healthStatePath(): string {
-  return path.join(os.homedir(), '.modsearch', 'state.json');
+  return path.join(modsearchDataDir(), 'state.json');
 }
 
 function readStateFile(filePath: string): { engineCooldowns?: unknown; engineHealth?: unknown } {

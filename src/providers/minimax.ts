@@ -15,6 +15,7 @@
 // The model-free endpoint is not in the public API reference; it is the
 // endpoint of https://github.com/MiniMax-AI/MiniMax-Coding-Plan-MCP
 import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { normalizePublishedAt } from '../util/paths.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
 import { resolveEndpoint } from './endpoint.ts';
@@ -183,8 +184,9 @@ export async function executeMinimaxSearch(options: EngineRequest): Promise<Engi
       snippet: r.snippet ?? '',
       source: r.link ? safeHostname(r.link) : undefined,
     };
-    if (r.date) {
-      item.published_at = r.date;
+    const published = normalizePublishedAt(r.date);
+    if (published) {
+      item.published_at = published;
     }
     return item;
   });
@@ -319,8 +321,9 @@ export async function executeMinimaxWebSearch(options: EngineRequest): Promise<E
           source: entry.url ? safeHostname(entry.url) : undefined,
         };
         // page_age is optional: MiniMax omits it on some results.
-        if (entry.page_age) {
-          item.published_at = entry.page_age;
+        const published = normalizePublishedAt(entry.page_age);
+        if (published) {
+          item.published_at = published;
         }
         items.push(item);
       }

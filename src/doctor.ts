@@ -131,7 +131,13 @@ const ROLE_JOB: Record<Role, string> = {
 };
 
 const INSTALL_AGY = 'curl -fsSL https://antigravity.google/cli/install.sh | bash && agy';
-const INSTALL_GROK = 'curl -fsSL https://x.ai/cli/install.sh | bash && grok';
+const INSTALL_GROK = installGrokFix();
+/** A fix the reader can run: the curl installer is a POSIX pipe, useless on Windows. */
+function installGrokFix(): string {
+  return process.platform === 'win32'
+    ? 'Install the Grok CLI for your platform (see its docs), then sign in with: grok auth login'
+    : 'curl -fsSL https://x.ai/cli/install.sh | bash && grok auth login';
+}
 
 function configuredApiKeys(
   fromEnv: string | undefined,
@@ -371,7 +377,7 @@ function diagnoseEngine(
       ready,
       keySource,
       reason: keySource
-        ? `${apiKeyPresentReason(count, keySource)}. ${channelNote}`
+        ? `${apiKeyPresentReason(count, keySource)} ${channelNote}`
         : 'no API key (not in ZHIPU_API_KEY / ZAI_API_KEY or the config file)',
       ...(ready ? {} : { fix: 'modsearch config set zhipu.apiKey <key>' }),
     };
@@ -390,7 +396,7 @@ function diagnoseEngine(
       ready,
       keySource,
       reason: keySource
-        ? `${apiKeyPresentReason(count, keySource)}. The key only works on the host of its own region: api.minimax.cn for mainland accounts, api.minimax.io for global ones.`
+        ? `${apiKeyPresentReason(count, keySource)} The key only works on the host of its own region: api.minimax.cn for mainland accounts, api.minimax.io for global ones.`
         : 'no API key (not in MINIMAX_API_KEY or the config file)',
       ...(ready ? {} : { fix: `modsearch config set ${engine.name}.apiKey <key>` }),
     };
@@ -474,12 +480,16 @@ function diagnoseCooldown(
     const target = parseCooldownStateKey(stateKey);
     const entry = coolingEntry(state, target.engine, now, target.keyIndex);
     if (entry) {
+      // The reason can carry a JSON error body: cut on a wide bound with an
+      // ellipsis rather than slicing mid-word, so a truncated cause still
+      // reads as a sentence.
+      const firstLine = entry.reason.split('\n')[0];
       engines.push({
         engine: target.engine,
         ...(target.keyIndex === undefined ? {} : { keyIndex: target.keyIndex }),
         until: entry.until,
         remaining: formatRemaining(Date.parse(entry.until) - now.getTime()),
-        reason: entry.reason.split('\n')[0].slice(0, 120),
+        reason: firstLine.length > 400 ? `${firstLine.slice(0, 400)}…` : firstLine,
       });
     }
   }
@@ -575,11 +585,27 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     engineProblem = `"${configuredName}" is not a known engine, so search picks one automatically`;
   }
 
+  const cooldownDiagnosis = diagnoseCooldown(config, statePath, now);
+  const coolingNow = new Set(
+    cooldownDiagnosis.enabled ? cooldownDiagnosis.engines.map((entry) => entry.engine) : [],
+  );
+
   const roles: RoleDiagnosis[] = ROLES.map((role) => {
-    const candidates = candidatesForRole(role, config).map((engine) =>
-      diagnoseEngine(engine, config, env, role),
-    );
-    const resolved = candidates.find((c) => c.enabled && c.ready)?.engine ?? null;
+    const candidates = candidatesForRole(role, config).map((engine) => {
+      const diagnosis = diagnoseEngine(engine, config, env, role);
+      if (coolingNow.has(diagnosis.engine)) {
+        diagnosis.reason += ' (cooling right now — the run order moves it to the back until the cooldown lifts)';
+      }
+      return diagnosis;
+    });
+    // The engine the run would actually ask first: among ready candidates, the
+    // ones not cooling win, because the router orders cooling engines last.
+    // Only when every ready candidate is cooling does resolved name a cooling
+    // engine, and then the reason lines above say so.
+    const resolved =
+      candidates.find((c) => c.enabled && c.ready && !coolingNow.has(c.engine))?.engine ??
+      candidates.find((c) => c.enabled && c.ready)?.engine ??
+      null;
     return { role, job: ROLE_JOB[role], candidates, resolved };
   });
 
@@ -620,7 +646,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
       source: allowPrivate ? 'file' : 'default',
     },
     projectConfig,
-    cooldown: diagnoseCooldown(config, statePath, now),
+    cooldown: cooldownDiagnosis,
     roles,
   };
 }
@@ -652,9 +678,15 @@ export function formatDoctorReport(report: DoctorReport): string {
     lines.push(`  file: ${file.path} (unreadable)`);
     lines.push(`    ! ${file.problem}`);
   } else {
-    lines.push(`  file: ${file.path} (present, mode ${file.mode})`);
-    if (!file.permissionsOk && file.note) {
+    // Windows has no POSIX mode to show; the file line just says "present",
+    // and the ACL note (if any) follows so the icacls hint reaches text too,
+    // not only --json.
+    lines.push(file.mode ? `  file: ${file.path} (present, mode ${file.mode})` : `  file: ${file.path} (present)`);
+    if (file.note) {
       lines.push(`    ! ${file.note}`);
+    }
+    if (!file.permissionsOk && !file.note) {
+      lines.push(`    ! group/world can read this file. Run: chmod 600 ${file.path}`);
     }
   }
   const project = report.projectConfig;

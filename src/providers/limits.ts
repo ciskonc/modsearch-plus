@@ -8,3 +8,10 @@
  * default max chars, firecrawl on its cloud markdown.
  */
 export const MAX_CONTENT_CHARS = 50_000;
+
+/**
+ * The result count no search engine returns more of. `--max-results` above it
+ * is honored as far as possible — the CLI says so instead of silently handing
+ * back fewer rows than the caller asked for.
+ */
+export const MAX_RESULTS_CEILING = 50;

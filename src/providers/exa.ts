@@ -7,6 +7,7 @@
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
 import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { normalizePublishedAt } from '../util/paths.ts';
 import type { EngineRequest, EngineOutput, SearchEngine } from './index.ts';
 import { resolveEndpoint } from './endpoint.ts';
 
@@ -111,9 +112,11 @@ export async function executeExaSearch(options: EngineRequest): Promise<EngineOu
       snippet: r.highlights?.[0] ?? '',
       source: r.url ? safeHostname(r.url) : undefined,
     };
-    // Defensive: only carry a date when Exa actually returned one.
-    if (r.publishedDate) {
-      item.published_at = r.publishedDate;
+    // Defensive: only carry a date when Exa actually returned one, and always
+    // in the shared second-precision UTC shape.
+    const published = normalizePublishedAt(r.publishedDate);
+    if (published) {
+      item.published_at = published;
     }
     return item;
   });

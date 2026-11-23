@@ -110,7 +110,7 @@ describe('youcom provider', () => {
         url: 'https://nodejs.org/en/about/previous-releases',
         snippet: 'Node.js 24 entered LTS in October 2025.',
         source: 'nodejs.org',
-        published_at: '2026-10-26T09:57:39',
+        published_at: '2026-10-26T09:57:39Z',
       },
       {
         title: 'Release notes',

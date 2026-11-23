@@ -739,9 +739,19 @@ function hasApiKeys(value) {
   );
 }
 
-/** ~/.modsearch/config.json, the one file every harness shares. */
+/**
+ * The modsearch data directory: MODSEARCH_HOME when set (e2e and multi-host
+ * isolation — os.homedir() only follows USERPROFILE, so a redirected DSH_HOME
+ * does nothing for this path on Windows), else ~/.modsearch, the one file
+ * every harness shares.
+ */
+function modsearchDataDir() {
+  const env = process.env.MODSEARCH_HOME;
+  return env && env.trim() !== '' ? env.trim() : join(homedir(), '.modsearch');
+}
+
 function modsearchConfigPath() {
-  return join(homedir(), '.modsearch', 'config.json');
+  return join(modsearchDataDir(), 'config.json');
 }
 
 /**
@@ -945,27 +955,38 @@ function applyCardSettings(patch) {
     }
   }
   // The drag ordering: a full list of search-engine names, first is tried
-  // first. Every named engine gets its index+1 as priority; a search engine
-  // the list omits loses any stored priority and falls back to the built-in
-  // order. `local` is a fetcher and never takes a position.
+  // first. Every named engine that the file actually configures gets a
+  // consecutive priority; a search engine the list omits loses any stored
+  // priority and falls back to the built-in order. `local` is a fetcher and
+  // never takes a position.
   if (Array.isArray(patch?.order)) {
     if (config.engines !== undefined && !isPlainObject(config.engines)) {
       throw new Error('the "engines" section of the config file is not an object');
     }
     config.engines = { ...config.engines };
     const named = new Set();
-    patch.order.forEach((name, index) => {
+    let position = 0;
+    patch.order.forEach((name) => {
       const engine = canonicalEngine(typeof name === 'string' ? name : '');
       if (!CARD_ENGINES.includes(engine) || engine === 'local') {
         throw new Error(`engine ${name} cannot take a chain position`);
       }
       named.add(engine);
       const holders = fileKeysFor(engine, config);
-      const target = holders.length > 0 ? holders[holders.length - 1] : engine;
+      // A chain position for an engine the file never configured stays a
+      // position on the card only. Writing `{ priority: N }` here used to
+      // mint a config entry out of thin air, which flipped an engine the user
+      // never set up (an uninstalled grok-cli, an unsigned-in antigravity-cli)
+      // into the automatic chain with no enabled:false to hold it back.
+      if (holders.length === 0) {
+        return;
+      }
+      position += 1;
+      const target = holders[holders.length - 1];
       if (config.engines[target] !== undefined && !isPlainObject(config.engines[target])) {
         throw new Error(`the "engines.${target}" entry of the config file is not an object`);
       }
-      config.engines[target] = { ...config.engines[target], priority: index + 1 };
+      config.engines[target] = { ...config.engines[target], priority: position };
     });
     for (const engine of CARD_ENGINES) {
       if (engine === 'local' || named.has(engine)) {

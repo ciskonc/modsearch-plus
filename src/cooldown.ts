@@ -14,6 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { canonicalEngineName, cooldownEnabled, type ModsearchConfig } from './config.ts';
 import { ApiKeyFailureError } from './util/apiKeys.ts';
+import { modsearchDataDir } from './util/paths.ts';
 import { redactSecrets } from './util/redact.ts';
 
 export interface CooldownEntry {
@@ -27,6 +28,13 @@ export interface CooldownEntry {
 
 export interface CooldownState {
   engineCooldowns: Record<string, CooldownEntry>;
+  /**
+   * The same file carries the engine health history (util/health.ts owns that
+   * section). Cooldown writes re-write the whole file, so the load keeps every
+   * section it did not clean — a cooldown record or a clear must not erase the
+   * traffic-light history.
+   */
+  engineHealth?: unknown;
 }
 
 const KEY_COOLDOWN_SUFFIX = /^(.*)::key:(\d+)$/;
@@ -50,9 +58,9 @@ export function parseCooldownStateKey(stateKey: string): {
   };
 }
 
-/** Resolved at call time so a faked HOME (tests) redirects the state too. */
+/** Resolved at call time so a faked HOME (tests) or MODSEARCH_HOME redirects the state too. */
 export function currentStatePath(): string {
-  return path.join(os.homedir(), '.modsearch', 'state.json');
+  return path.join(modsearchDataDir(), 'state.json');
 }
 
 /** A quota error with no reset time cools for this long before a retry. */
@@ -97,7 +105,7 @@ export function loadCooldownState(statePath = currentStatePath()): CooldownState
   }
 
   try {
-    const parsed = JSON.parse(raw) as { engineCooldowns?: unknown } | null;
+    const parsed = JSON.parse(raw) as Partial<CooldownState> | null;
     if (!parsed || typeof parsed !== 'object' || typeof parsed.engineCooldowns !== 'object') {
       return emptyCooldownState();
     }
@@ -123,7 +131,11 @@ export function loadCooldownState(statePath = currentStatePath()): CooldownState
         clean[key] = clean[key] ? laterEntry(clean[key], normalized) : normalized;
       }
     }
-    return { engineCooldowns: clean };
+    // Every section the cooldown layer does not own (engineHealth, written by
+    // util/health.ts into the same file) travels back through the load, so a
+    // cooldown write — a record, a clear — re-writes them verbatim instead of
+    // silently wiping the card's traffic-light history.
+    return { ...parsed, engineCooldowns: clean };
   } catch {
     // Corrupt JSON is a lost cache, not an error to raise at the user.
     return emptyCooldownState();
@@ -345,11 +357,11 @@ export function recordQuotaCooldown(
     return null;
   }
   // Redact before truncating: a cut placed inside a secret would hide it from
-  // the exact-match scrub, and doctor renders this reason back to humans.
-  const reason = redactSecrets(error instanceof Error ? error.message : String(error)).slice(
-    0,
-    300,
-  );
+  // the exact-match scrub, and doctor renders this reason back to humans. The
+  // cut lands on a word boundary with an ellipsis, so a truncated cause still
+  // reads as a sentence instead of half a JSON object.
+  const full = redactSecrets(error instanceof Error ? error.message : String(error));
+  const reason = full.length > 600 ? `${full.slice(0, 600)}…` : full;
   const entry: CooldownEntry = {
     until: until.toISOString(),
     reason,
@@ -417,7 +429,12 @@ export function clearEngineCooldown(
  * that fails must surface as an error, not print success over a file still there.
  */
 export function clearAllCooldowns(statePath = currentStatePath()): void {
-  fs.rmSync(statePath, { force: true });
+  // Only the cooldown section goes. The file also holds engineHealth — the
+  // card's traffic-light history — and deleting the whole file used to take
+  // that history with it, which "clear the cooldowns" never promised.
+  updateStateOnDisk(statePath, (disk) => {
+    disk.engineCooldowns = {};
+  });
 }
 
 /**

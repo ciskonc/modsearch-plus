@@ -119,7 +119,7 @@ describe('exa provider', () => {
         url: 'https://a.example.com/page',
         snippet: 'highlight a',
         source: 'a.example.com',
-        published_at: '2026-01-02',
+        published_at: '2026-01-02T00:00:00Z',
       },
       { title: 'B', url: 'not a url', snippet: '', source: undefined },
     ]);

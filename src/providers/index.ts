@@ -61,6 +61,15 @@ export interface EngineOutput {
      * because this call succeeded.
      */
     keyFailure?: { message: string; resetAt?: number };
+    /**
+     * The fetch answered, but the page it came back with must not be read as
+     * evidence: an HTTP error status (404, 410, 503) or zero readable text.
+     * The run still succeeds — the URL genuinely looks like that — yet the
+     * source is marked `unavailable`, the uncertainty opens with "Treat this
+     * fetch as failed", and a `-u` run exits non-zero, so a model cannot file
+     * an empty shell as a successful read.
+     */
+    fetchFailure?: { reason: string };
   };
 }
 

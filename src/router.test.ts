@@ -13,7 +13,8 @@ import {
   parseSources,
   planRole,
   planRun,
-  X_DEGRADE_NOTE,
+  xDegradeNote,
+  xUnavailableNote,
 } from './router.ts';
 
 const WITH_AGY = envWithBinaries('agy');
@@ -303,12 +304,12 @@ describe('run plans', () => {
     });
     expect(plans.map((plan) => plan.source)).toEqual(['web', 'x']);
     // The web entry is a clean web answer, not a degraded one.
-    expect(plans[0].notes).not.toContain(X_DEGRADE_NOTE);
+    expect(plans[0].notes).not.toContain(xUnavailableNote(config(), WITH_AGY));
     expect(plans[0].unavailable).toBeFalsy();
     // The X entry runs nothing and carries the honest caveat.
     expect(plans[1].unavailable).toBe(true);
     expect(plans[1].engine).toBeUndefined();
-    expect(plans[1].notes).toContain(X_DEGRADE_NOTE);
+    expect(plans[1].notes).toContain(xUnavailableNote(config(), WITH_AGY));
   });
 
   it('carries the degrade note on the plan so a mid-run grok failure is flagged', () => {
@@ -316,7 +317,7 @@ describe('run plans', () => {
     try {
       const [plan] = planRun({ mode: 'search', query: '推特上怎么说', config: config(), env });
       expect(plan.engine?.name).toBe('grok-cli');
-      expect(plan.degradeNote).toBe(X_DEGRADE_NOTE);
+      expect(plan.degradeNote).toBe(xDegradeNote(config(), env));
       expect(plan.fallbacks.length).toBeGreaterThan(0);
     } finally {
       restoreHome();
@@ -335,7 +336,7 @@ describe('run plans', () => {
     restore();
     expect(plan.source).toBe('x');
     expect(plan.engine?.name).toBe('firecrawl');
-    expect(plan.notes).toContain(X_DEGRADE_NOTE);
+    expect(plan.notes).toContain(xDegradeNote(config(), WITH_AGY));
   });
 
   it('fetch mode ignores sources and always plans a fetch chain', () => {

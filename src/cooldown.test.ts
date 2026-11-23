@@ -1,6 +1,23 @@
-import * as fs from 'fs';
+// The default import is Node's fs, kept mutable for tests.
+import fsDefault from 'fs';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+const fs = fsDefault;
+
+// fs cannot be spied on through the ESM namespace (its properties are bound
+// getters), so the write-failure injection is a module mock with a hoisted
+// switch: transparent unless a test opens it.
+const fsMockState = vi.hoisted(() => ({ failWrites: false }));
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  const writeFileSync = (...args: Parameters<typeof actual.writeFileSync>) => {
+    if (fsMockState.failWrites) {
+      throw new Error('EACCES: permission denied');
+    }
+    return actual.writeFileSync(...args);
+  };
+  return { ...actual, writeFileSync, default: { ...actual, writeFileSync } };
+});
 import {
   buildCooldownController,
   classifyQuota,
@@ -256,13 +273,23 @@ describe('recording and clearing', () => {
     expect(loadCooldownState(p).engineCooldowns[second]).toBeDefined();
   });
 
-  it('wipes the whole state file', () => {
+  it('wipes only the cooldowns and keeps the engine health history', () => {
     const p = statePath();
     const state = emptyCooldownState();
     recordQuotaCooldown(state, 'exa', new Error('out of credits'), now, p);
+    // The card renders this history; "clear the cooldowns" never promised to
+    // take it, and deleting the whole file used to do exactly that.
+    const onDisk = loadCooldownState(p);
+    fs.writeFileSync(
+      p,
+      JSON.stringify({ ...onDisk, engineHealth: { exa: { ok: true, at: now.toISOString() } } }),
+      'utf-8',
+    );
     clearAllCooldowns(p);
-    expect(fs.existsSync(p)).toBe(false);
-    expect(loadCooldownState(p)).toEqual(emptyCooldownState());
+    expect(fs.existsSync(p)).toBe(true);
+    const cleared = loadCooldownState(p) as { engineCooldowns: Record<string, unknown>; engineHealth?: unknown };
+    expect(cleared.engineCooldowns).toEqual({});
+    expect(cleared.engineHealth).toEqual({ exa: { ok: true, at: now.toISOString() } });
   });
 });
 
@@ -405,13 +432,19 @@ describe('the cache never breaks the run, and clear always reaches the disk', ()
     },
   );
 
-  it('state clear surfaces a delete that failed instead of pretending success', () => {
-    const dir = tempDir('modsearch-cleardir-');
-    const p = path.join(dir, 'state-dir');
-    fs.mkdirSync(path.join(p, 'child'), { recursive: true });
-    // The path is a non-empty directory: rmSync without recursive must throw,
-    // and clearAllCooldowns must let it out so the CLI can exit non-zero.
-    expect(() => clearAllCooldowns(p)).toThrow();
+  it('state clear surfaces a write that failed instead of pretending success', () => {
+    const p = statePath();
+    const state = emptyCooldownState();
+    const now = new Date('2026-08-06T00:00:00.000Z');
+    recordQuotaCooldown(state, 'exa', new Error('out of credits'), now, p);
+    fsMockState.failWrites = true;
+    try {
+      // The clear must reach the disk (or honestly fail): a silent fake
+      // success would leave the engine cooling for nothing.
+      expect(() => clearAllCooldowns(p)).toThrow(/EACCES/);
+    } finally {
+      fsMockState.failWrites = false;
+    }
   });
 
   it('skips the write when nothing changed, so a quiet clear touches no file', () => {

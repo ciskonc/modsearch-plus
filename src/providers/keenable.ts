@@ -12,6 +12,7 @@
 // never leave the machine. Keyless fetch is on by default and switched off
 // with `keenable.keylessFetch false`.
 import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { normalizePublishedAt } from '../util/paths.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { resetClause, retryAfterSeconds, SPENT_ALLOWANCE_MIN_SECONDS } from '../util/retryAfter.ts';
 import { requestText } from '../util/timedRequest.ts';
@@ -22,8 +23,7 @@ import { MAX_CONTENT_CHARS } from './limits.ts';
 
 const DEFAULT_MAX_RESULTS = 10;
 /** Keenable rejects max_results outside 1-50. */
-const MAX_RESULTS_CEILING = 50;
-const KEENABLE_DEFAULT_BASE = 'https://api.keenable.ai';
+const MAX_RESULTS_CEILING = 50;const KEENABLE_DEFAULT_BASE = 'https://api.keenable.ai';
 /** Required on keyless calls: how Keenable attributes anonymous traffic. */
 const APP_TITLE = 'modsearch';
 /** Keenable rejects a fetch `prompt` longer than this. */
@@ -186,8 +186,9 @@ async function keenableSearch(options: EngineRequest): Promise<EngineOutput> {
       snippet: r.snippet || r.description || '',
       source: r.url ? safeHostname(r.url) : undefined,
     };
-    if (r.published_at) {
-      item.published_at = r.published_at;
+    const published = normalizePublishedAt(r.published_at);
+    if (published) {
+      item.published_at = published;
     }
     return item;
   });
@@ -289,9 +290,15 @@ async function keenableFetch(options: EngineRequest): Promise<EngineOutput> {
   }
 
   const uncertainty: string[] = [];
-  if (!prompt && content.length < 200) {
+  let fetchFailure: { reason: string } | undefined;
+  if (!prompt && content.length === 0) {
+    fetchFailure = { reason: "Keenable's reader returned no content at all" };
     uncertainty.push(
-      'Very little content came back from Keenable. The page may be sparse, or built by browser-side JavaScript the reader did not run.',
+      "Keenable's reader returned no content. The page may block the reader, or its content is rendered by browser-side JavaScript the reader did not run.",
+    );
+  } else if (!prompt && content.length < 200) {
+    uncertainty.push(
+      `Little content came back from Keenable (${content.length} characters). The page may be genuinely this small, or built by browser-side JavaScript the reader did not run. Treat this fetch as failed if you expected substantive page content.`,
     );
   }
 
@@ -311,6 +318,7 @@ async function keenableFetch(options: EngineRequest): Promise<EngineOutput> {
         totalChars: data.total_chars ?? null,
         publishedAt: data.published_at ?? null,
       },
+      fetchFailure,
     },
   };
 }

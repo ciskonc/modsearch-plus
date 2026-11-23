@@ -12,6 +12,7 @@ import { parseSources, planRun, SOURCE_ROLE, type SourcePlan } from './router.ts
 import { runCommand } from './subprocess.ts';
 import { ApiKeyFailureError, isApiKeyFailure, splitApiKeys } from './util/apiKeys.ts';
 import { recordHealth } from './util/health.ts';
+import { canonicalUrlKey, dedupeUrlVariants } from './util/paths.ts';
 import { redactSecrets } from './util/redact.ts';
 
 export interface RunSearchOptions {
@@ -318,7 +319,19 @@ async function runParallelSearch(context: {
 
   // The plan gives the availability-filtered search chain; the parallel set
   // is the explicit list when given, else the whitelist slice of that chain.
-  const plans = planRun({ mode, query, config, requestedEngine: options.engine, env });
+  // The cooldown rides along exactly as it does on the serial path — without
+  // it a cooling key was re-called for real in parallel while the serial run
+  // correctly skipped it.
+  const plans = planRun({
+    mode,
+    query,
+    config,
+    requestedEngine: options.engine,
+    env,
+    cooldown: options.cooldown
+      ? { state: options.cooldown.state, now: options.cooldown.now }
+      : undefined,
+  });
   const webPlan = plans.find((plan) => plan.source === 'web');
   const chain = (webPlan?.engine
     ? [webPlan.engine!, ...plans[0].fallbacks]
@@ -395,15 +408,26 @@ async function runParallelSearch(context: {
 
   const succeeded = outcomes.filter((outcome) => outcome.ok && outcome.entry);
   if (succeeded.length === 0) {
+    // The envelope must say why nothing answered. A run whose explicit engine
+    // list was all typos never launched anything, so `outcomes` is empty and
+    // per-engine errors alone would read as a bare "failed" with no cause —
+    // the plan notes (unknown engine, availability, cooldown) are the reason.
     throw new SourceRunError(
-      `Every engine in the parallel run failed.\n${outcomes
-        .map((outcome) => `  - ${outcome.engine.name}: ${outcome.error ?? 'failed'}`)
-        .join('\n')}`,
+      [
+        'Every engine in the parallel run failed.',
+        ...planNotes,
+        ...outcomes.map((outcome) => `  - ${outcome.engine.name}: ${outcome.error ?? 'failed'}`),
+      ]
+        .join('\n'),
       attempts,
     );
   }
 
   const maxResults = options.maxResults ?? 10;
+  const rawHits = succeeded.reduce((sum, outcome) => {
+    const items = (outcome.entry!.result as { items?: unknown }).items;
+    return sum + (Array.isArray(items) ? items.length : 0);
+  }, 0);
   const fused = fuseParallelOutputs(
     succeeded.map((outcome) => ({ engine: outcome.engine.name, entry: outcome.entry! })),
     maxResults,
@@ -429,11 +453,16 @@ async function runParallelSearch(context: {
     warnings,
     attempts,
     durationSeconds: (Date.now() - startedAt) / 1000,
-    summary: `Parallel query across ${outcomes.length} engine(s): ${succeeded.length} answered, fused into ${fused.length} unique result(s) (reciprocal rank fusion, deduplicated by URL). Each item lists the engines that returned it.`,
+    summary: `Parallel query across ${outcomes.length} engine(s): ${succeeded.length} answered, fused into ${fused.length} unique result(s)${rawHits > fused.length ? ` from ${rawHits} raw hit(s)` : ''} (reciprocal rank fusion, deduplicated by URL). Each item lists the engines that returned it.`,
     items: fused,
-    uncertainty: succeeded.length < outcomes.length
-      ? [`${outcomes.length - succeeded.length} engine(s) in the parallel set failed; the fusion covers only the engines that answered.`]
-      : [],
+    uncertainty: [
+      ...(succeeded.length < outcomes.length
+        ? [`${outcomes.length - succeeded.length} engine(s) in the parallel set failed; the fusion covers only the engines that answered.`]
+        : []),
+      ...(fused.length < rawHits
+        ? [`${rawHits - fused.length} raw hit(s) were dropped while fusing and capping at ${maxResults} result(s); the items shown are the top-ranked survivors, not everything the engines returned.`]
+        : []),
+    ],
   };
 }
 
@@ -457,7 +486,7 @@ function fuseParallelOutputs(
       : [];
     items.forEach((item, index) => {
       const link = typeof item.url === 'string' ? item.url : '';
-      const key = link || `no-url:${engine}:${index}`;
+      const key = canonicalUrlKey(link) ?? (link || `no-url:${engine}:${index}`);
       const seen = byUrl.get(key);
       if (seen) {
         seen.engines.add(engine);
@@ -515,9 +544,14 @@ async function runOneSource(
   const candidates = [plan.engine, ...plan.fallbacks].filter(Boolean) as SearchEngine[];
 
   if (candidates.length === 0) {
+    // A typo in --engine (or forcing an engine into a role it does not have)
+    // is the actual problem, and the plan notes name it. Stop there: the
+    // generic "no engine on this machine" pitch below would then claim engines
+    // are missing that are in fact configured and working.
+    if (plan.notes.some((note) => note.includes('--engine'))) {
+      throw new SourceRunError(plan.notes.join(' '), []);
+    }
     const base = noEngineMessage(SOURCE_ROLE[plan.source] === 'social' ? 'social' : mode);
-    // A typo in --engine is the actual problem: do not bury it under generic
-    // setup advice.
     throw new SourceRunError(plan.notes.length > 0 ? `${plan.notes.join(' ')}\n${base}` : base, []);
   }
 
@@ -713,6 +747,21 @@ async function runOneSource(
         ? ({ ...output.result } as Record<string, unknown>)
         : ({ result: output.result } as Record<string, unknown>);
 
+    // A fetch that came back as an HTTP error page or an empty shell must not
+    // read as a successful read: the engine declared it (meta.fetchFailure),
+    // so the source flips to `unavailable` and the uncertainty opens with the
+    // explicit "Treat this fetch as failed" instruction the envelope used to
+    // leave to a sparse-page disclaimer buried mid-list.
+    let fetchFailureNote: string | null = null;
+    if (mode === 'fetch' && output.meta.fetchFailure) {
+      status = 'unavailable';
+      fetchFailureNote = `Treat this fetch as failed: ${output.meta.fetchFailure.reason}.`;
+      const existing = Array.isArray(body.uncertainty)
+        ? (body.uncertainty as unknown[]).filter((line): line is string => typeof line === 'string')
+        : [];
+      body.uncertainty = [fetchFailureNote, ...existing];
+    }
+
     // The local engine hands its own runtime notices back as `warnings`. Merge
     // those in after the routing ones. Other engines emit no warnings key.
     const engineWarnings = Array.isArray(body.warnings)
@@ -730,6 +779,13 @@ async function runOneSource(
     delete body.durationSeconds;
     delete body.warnings;
     delete body.attempts;
+
+    // One page under several URL spellings (fragment scrolls, trailing slash,
+    // an explicit www. alias) is one result to the reader: keep the first,
+    // which is the better-ranked occurrence. Real query differences stay.
+    if (Array.isArray(body.items) && body.items.length > 1) {
+      body.items = dedupeUrlVariants(body.items as Array<{ url?: unknown }>);
+    }
 
     return {
       ...body,
@@ -811,7 +867,12 @@ async function withinTime<T>(engineName: string, work: Promise<T>, ms: number): 
   let timer: NodeJS.Timeout | undefined;
   const overrun = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(
-      () => reject(new Error(`${engineName} engine timed out after ${ms} ms.`)),
+      () =>
+        reject(
+          new Error(
+            `The run-wide deadline ran out before ${engineName} finished (after ${Math.round(ms)} ms).`,
+          ),
+        ),
       ms,
     );
   });

@@ -501,11 +501,25 @@ export async function executeHttpFetch(options: EngineRequest): Promise<EngineOu
   }
 
   // A page that came back nearly empty is genuine doubt about the evidence: the
-  // content may be incomplete. That is epistemic, so it stays in uncertainty.
+  // content may be incomplete. An HTTP error status or zero readable text is
+  // stronger than doubt — meta.fetchFailure marks the fetch as failed so the
+  // source cannot read as a successful read (the summary still names the real
+  // HTTP status).
   const uncertainty: string[] = [];
-  if (result.text.length < 200) {
+  let fetchFailure: { reason: string } | undefined;
+  if (result.status >= 400) {
+    fetchFailure = { reason: `the server answered HTTP ${result.status} ${result.statusText}` };
     uncertainty.push(
-      'Very little text came back. The page is probably rendered by JavaScript, which this engine does not run.',
+      `The server answered HTTP ${result.status} ${result.statusText}. There is no page content to read; this is not a JavaScript-rendering problem.`,
+    );
+  } else if (result.text.length === 0) {
+    fetchFailure = { reason: 'the page returned no readable text at all' };
+    uncertainty.push(
+      'No readable text came back. The page may block scraping, or its content is rendered by JavaScript, which this engine does not run.',
+    );
+  } else if (result.text.length < 200) {
+    uncertainty.push(
+      `Little text came back (${result.text.length} characters). The page may be genuinely this small, or its main content is rendered by JavaScript, which this engine does not run. Treat this fetch as failed if you expected substantive page content.`,
     );
   }
 
@@ -521,6 +535,7 @@ export async function executeHttpFetch(options: EngineRequest): Promise<EngineOu
       conversationId: null,
       durationSeconds: (Date.now() - startedAt) / 1000,
       usage: { bytes: result.meta.bytes, redirects: result.meta.redirectChain.length },
+      fetchFailure,
     },
   };
 }

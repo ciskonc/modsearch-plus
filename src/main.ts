@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   CONFIG_PATH,
+  currentConfigPath,
   initConfigFile,
   describeIgnoredProjectFields,
   loadConfigFile,
@@ -17,6 +18,7 @@ import {
 import { buildCooldownController, clearAllCooldowns, currentStatePath } from './cooldown.ts';
 import { formatDoctorReport, runDoctor } from './doctor.ts';
 import { findEngine, listEngines } from './providers/index.ts';
+import { MAX_RESULTS_CEILING } from './providers/limits.ts';
 import { runSearch } from './search.ts';
 import { waitForPendingKills } from './subprocess.ts';
 import { readSecret } from './util/secretInput.ts';
@@ -51,8 +53,8 @@ program
   .command('search', { isDefault: true })
   .description('Search the web or X, or fetch a page (default command)')
   .option('-q, --query <text>', 'Search query (or answer focus when combined with -u)')
-  .option('-u, --url <url>', 'Fetch this web page instead of searching')
-  .option('-o, --output <path>', 'Write result JSON to a file')
+  .option('-u, --url <url>', 'Fetch this web page instead of searching (this is the fetch mode; there is no separate fetch command)')
+  .option('-o, --output <path>', 'Write result JSON to a file (stdout then carries a one-line summary instead of the full JSON)')
   .option(
     '-s, --source <list>',
     'Where to search: web, x, or web,x (default: web, or x when the query is about X)',
@@ -98,6 +100,12 @@ program
       if (!Number.isFinite(maxResults) || maxResults <= 0) {
         throw new Error('Invalid --max-results. Use a positive integer.');
       }
+      if (maxResults > MAX_RESULTS_CEILING) {
+        await writeFully(
+          process.stderr,
+          `Note: --max-results ${maxResults} is capped at ${MAX_RESULTS_CEILING}; no engine returns more than ${MAX_RESULTS_CEILING} results.\n`,
+        );
+      }
 
       // Load the config once so the cooldown controller reads the same switch
       // the run does. Off returns no controller, and the run touches no state.
@@ -132,17 +140,36 @@ program
         const outputPath = path.resolve(options.output);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, output, 'utf-8');
+        // The full JSON lives in the file; a scripted caller's stdout carries a
+        // one-line receipt instead of a second copy of ~15 KB of JSON.
+        await writeFully(
+          process.stdout,
+          `Wrote ${outputPath} (mode=${result.mode}, ${result.results.length} source(s), status=${result.results
+            .map((entry) => entry.status)
+            .join('/')}).\n`,
+        );
+      } else {
+        await writeFully(process.stdout, `${output}\n`);
       }
 
-      await writeFully(process.stdout, `${output}\n`);
+      // A fetch whose only source came back as an HTTP error page or an empty
+      // shell (status "unavailable") must not exit 0: scripts and agents gate
+      // on the exit code. Same for a run where nothing at all answered — the
+      // serial path throws (exit 1), so the envelope paths must match. A
+      // search with at least one answering source still exits 0.
+      const anyUnavailable = result.results.some((entry) => entry.status === 'unavailable');
+      const allUnavailable = result.results.length > 0 && result.results.every((entry) => entry.status === 'unavailable');
+      if (allUnavailable || (result.mode === 'fetch' && anyUnavailable)) {
+        exitCode = 1;
+      }
     } catch (error) {
-      await writeFully(
-        process.stderr,
-        [
-          `Error: ${error instanceof Error ? error.message : String(error)}`,
-          `Known engines: ${listEngines().join(', ')}`,
-        ].join('\n') + '\n',
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      // The engine roster belongs on engine problems only: appending it to a
+      // bad --max-results read as advice nobody asked for.
+      const lines = /engine/i.test(message)
+        ? [`Error: ${message}`, `Known engines: ${listEngines().join(', ')}`]
+        : [`Error: ${message}`];
+      await writeFully(process.stderr, `${lines.join('\n')}\n`);
       exitCode = 1;
     }
     // Wait for any pending SIGKILL so an engine that ignored SIGTERM is not
@@ -176,18 +203,19 @@ program
 
 const config = program
   .command('config')
-  .description(`Manage ${CONFIG_PATH}. Optional: modsearch runs without it.`);
+  .description(`Manage ${currentConfigPath()}. Optional: modsearch runs without it.`);
 
 config
   .command('init')
-  .description(`Create a starter config at ${CONFIG_PATH}`)
+  .description(`Create a starter config at ${currentConfigPath()}`)
   .option('--force', 'Overwrite an existing config file')
   .action((options: { force?: boolean }) => {
     try {
-      initConfigFile(CONFIG_PATH, Boolean(options.force));
+      const configPath = currentConfigPath();
+      initConfigFile(configPath, Boolean(options.force));
       process.stdout.write(
         [
-          `Created ${CONFIG_PATH}`,
+          `Created ${configPath}`,
           'Everything is optional. Things you can set:',
           '  modsearch config set engine <antigravity-cli|tavily|exa|firecrawl|keenable|youcom>   which engine searches',
           '  modsearch config set <engine>.<apiKey|bin|model|baseURL|channel|keylessFetch> <value>   engine settings (channel: zhipu only, auto|coding|rest)',
@@ -229,7 +257,9 @@ config
         value = await readSecret(`Enter the value for ${key} (input hidden): `);
       }
       setConfigValue(key, value);
-      process.stdout.write(`Saved ${key} to ${CONFIG_PATH}\n`);
+      // The path the write actually used (MODSEARCH_HOME redirects it), not a
+      // module-load constant that would name the wrong file.
+      process.stdout.write(`Saved ${key} to ${currentConfigPath()}\n`);
     } catch (error) {
       process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
       process.exit(1);
@@ -252,11 +282,13 @@ config
 
 const state = program
   .command('state')
-  .description('Manage the quota cooldown state at ~/.modsearch/state.json');
+  .description(`Manage the quota cooldown state at ${currentStatePath()}`);
 
 state
   .command('clear')
-  .description('Forget every engine cooldown, so all engines are tried at full priority again')
+  .description(
+    'Forget every engine cooldown, so all engines are tried at full priority again (engine health history is kept)',
+  )
   .action(() => {
     try {
       const statePath = currentStatePath();

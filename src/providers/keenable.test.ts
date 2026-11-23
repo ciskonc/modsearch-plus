@@ -301,7 +301,7 @@ describe('keenable fetch', () => {
     mockFetchJson({ ...PAGE, content: 'Loading...' });
     const output = await fetchPage();
     expect((output.result as { uncertainty: string[] }).uncertainty[0]).toMatch(
-      /Very little content/,
+      /Little content came back from Keenable/,
     );
   });
 

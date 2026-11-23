@@ -41,11 +41,16 @@ describe('doctor: search engines', () => {
   afterEach(() => cleanupTempDirs());
 
   it('reports agy ready when its binary is on PATH, behind keyless firecrawl', () => {
-    const report = runDoctor({ config: {}, env: envWithBinaries('agy') });
-    const agy = engine(report, 'search', 'antigravity-cli');
-    expect(agy?.ready).toBe(true);
-    // Keyless firecrawl leads the default chain, so it resolves first.
-    expect(role(report, 'search')?.resolved).toBe('firecrawl');
+    const { restore } = withTempHome();
+    try {
+      const report = runDoctor({ config: {}, env: envWithBinaries('agy') });
+      const agy = engine(report, 'search', 'antigravity-cli');
+      expect(agy?.ready).toBe(true);
+      // Keyless firecrawl leads the default chain, so it resolves first.
+      expect(role(report, 'search')?.resolved).toBe('firecrawl');
+    } finally {
+      restore();
+    }
   });
 
   it('reports tavily ready from an env key and tags the source', () => {
@@ -89,15 +94,20 @@ describe('doctor: search engines', () => {
   });
 
   it('gives a copyable fix for a missing key and missing agy', () => {
-    const report = runDoctor({ config: {}, env: BARE_ENV });
-    // Keyless firecrawl means search always resolves, even on a bare machine.
-    expect(role(report, 'search')?.resolved).toBe('firecrawl');
-    const fc = engine(report, 'search', 'firecrawl');
-    expect(fc?.ready).toBe(true);
-    expect(fc?.reason).toMatch(/keyless/i);
-    expect(engine(report, 'search', 'tavily')?.fix).toContain('modsearch config set tavily.apiKey');
-    expect(engine(report, 'search', 'exa')?.fix).toContain('modsearch config set exa.apiKey');
-    expect(engine(report, 'search', 'antigravity-cli')?.fix).toContain('antigravity.google');
+    const { restore } = withTempHome();
+    try {
+      const report = runDoctor({ config: {}, env: BARE_ENV });
+      // Keyless firecrawl means search always resolves, even on a bare machine.
+      expect(role(report, 'search')?.resolved).toBe('firecrawl');
+      const fc = engine(report, 'search', 'firecrawl');
+      expect(fc?.ready).toBe(true);
+      expect(fc?.reason).toMatch(/keyless/i);
+      expect(engine(report, 'search', 'tavily')?.fix).toContain('modsearch config set tavily.apiKey');
+      expect(engine(report, 'search', 'exa')?.fix).toContain('modsearch config set exa.apiKey');
+      expect(engine(report, 'search', 'antigravity-cli')?.fix).toContain('antigravity.google');
+    } finally {
+      restore();
+    }
   });
 
   it('reports youcom ready on a bare machine with its keyless allowance', () => {
@@ -129,12 +139,17 @@ describe('doctor: fetch and X', () => {
   afterEach(() => cleanupTempDirs());
 
   it('resolves fetch to keyless Firecrawl by default, with local as the floor', () => {
-    const report = runDoctor({ config: {}, env: BARE_ENV });
-    const firecrawl = engine(report, 'fetch', 'firecrawl');
-    expect(firecrawl?.ready).toBe(true);
-    expect(firecrawl?.reason).toMatch(/keyless/i);
-    expect(engine(report, 'fetch', 'local')?.ready).toBe(true);
-    expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    const { restore } = withTempHome();
+    try {
+      const report = runDoctor({ config: {}, env: BARE_ENV });
+      const firecrawl = engine(report, 'fetch', 'firecrawl');
+      expect(firecrawl?.ready).toBe(true);
+      expect(firecrawl?.reason).toMatch(/keyless/i);
+      expect(engine(report, 'fetch', 'local')?.ready).toBe(true);
+      expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    } finally {
+      restore();
+    }
   });
 
   it('excludes Firecrawl from fetch after an explicit keylessFetch opt-out', () => {
@@ -172,24 +187,39 @@ describe('doctor: fetch and X', () => {
   });
 
   it('keeps keyed Firecrawl fetch ready even when keylessFetch is false', () => {
-    const report = runDoctor({
-      config: { engines: { firecrawl: { keylessFetch: false, apiKey: 'fc-x' } } },
-      env: BARE_ENV,
-    });
-    expect(engine(report, 'fetch', 'firecrawl')?.ready).toBe(true);
-    expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    const { restore } = withTempHome();
+    try {
+      const report = runDoctor({
+        config: { engines: { firecrawl: { keylessFetch: false, apiKey: 'fc-x' } } },
+        env: BARE_ENV,
+      });
+      expect(engine(report, 'fetch', 'firecrawl')?.ready).toBe(true);
+      expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    } finally {
+      restore();
+    }
   });
 
   it('treats choosing Firecrawl as consent for its keyless fetch path', () => {
-    const report = runDoctor({ config: { engine: 'firecrawl' }, env: BARE_ENV });
-    expect(engine(report, 'fetch', 'firecrawl')?.ready).toBe(true);
-    expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    const { restore } = withTempHome();
+    try {
+      const report = runDoctor({ config: { engine: 'firecrawl' }, env: BARE_ENV });
+      expect(engine(report, 'fetch', 'firecrawl')?.ready).toBe(true);
+      expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    } finally {
+      restore();
+    }
   });
 
   it("matches Firecrawl consent with the router's case-insensitive engine lookup", () => {
-    const report = runDoctor({ config: { engine: 'Firecrawl' }, env: BARE_ENV });
-    expect(engine(report, 'fetch', 'firecrawl')?.ready).toBe(true);
-    expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    const { restore } = withTempHome();
+    try {
+      const report = runDoctor({ config: { engine: 'Firecrawl' }, env: BARE_ENV });
+      expect(engine(report, 'fetch', 'firecrawl')?.ready).toBe(true);
+      expect(role(report, 'fetch')?.resolved).toBe('firecrawl');
+    } finally {
+      restore();
+    }
   });
 
   it('reports grok not ready when the login file is missing', () => {

@@ -383,7 +383,9 @@ async function firecrawlFetch(options: EngineRequest): Promise<EngineOutput> {
   // outright: a URL that does not resolve, or a domain nobody hosts, comes
   // back as an empty scrape, and "may be sparse" would bury that.
   const uncertainty: string[] = [];
+  let fetchFailure: { reason: string } | undefined;
   if (content.length === 0) {
+    fetchFailure = { reason: 'Firecrawl returned no content at all for this URL' };
     uncertainty.push(
       'Firecrawl returned no content at all for this URL: the domain may not exist, the host may be down, or the page may block scraping. Treat this fetch as failed rather than as an empty page.',
     );
@@ -415,6 +417,7 @@ async function firecrawlFetch(options: EngineRequest): Promise<EngineOutput> {
       durationSeconds: (Date.now() - startedAt) / 1000,
       usage: { statusCode: statusCode ?? null },
       ...(keyFailure ? { keyFailure } : {}),
+      ...(fetchFailure ? { fetchFailure } : {}),
     },
   };
 }

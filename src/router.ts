@@ -50,8 +50,32 @@ export function isXQuery(query: string): boolean {
 export const SOURCE_ROLE: Record<Source, Role> = { web: 'search', x: 'social' };
 
 /** Note added when the web answers a question that was aimed at X. */
-export const X_DEGRADE_NOTE =
-  'X itself was not reachable here (Grok Build missing, signed out, or failing), so this came from the public web, which cannot see inside X.';
+export function xDegradeNote(config: ModsearchConfig, env: NodeJS.ProcessEnv): string {
+  return `X search fell back to the public web because ${xDegradeCause(config, env)}; the public web cannot see inside X, so treat every result as second-hand web evidence.`;
+}
+
+/** Note on an explicitly requested X slot that nobody could serve. */
+export function xUnavailableNote(config: ModsearchConfig, env: NodeJS.ProcessEnv): string {
+  return `X search is unavailable here because ${xDegradeCause(config, env)}. The web entry in this run is a separate source and does not stand in for X.`;
+}
+
+/**
+ * The one true cause X could not be searched, read from the same facts doctor
+ * reports (engine shipped? binary and login file present?), not a three-way
+ * guess. The tool is the grok CLI — the "Grok Build" model-bundle name never
+ * appears, so nobody installs a model when they need a CLI.
+ */
+function xDegradeCause(config: ModsearchConfig, env: NodeJS.ProcessEnv): string {
+  const grok = findEngine('grok-cli');
+  if (!grok) {
+    return 'the grok-cli engine is not part of this build';
+  }
+  const settings = engineSettings('grok-cli', config, env);
+  if (!grok.isAvailable(settings, env, 'social')) {
+    return 'the grok CLI is not installed or not signed in on this machine (install it, then run: grok auth login)';
+  }
+  return 'the grok CLI failed to answer this query';
+}
 
 export interface SourcePlan {
   source: Source;
@@ -295,12 +319,13 @@ export function planRun(input: PlanInput): SourcePlan[] {
           // The web entry already answers this ground, so do not run a second
           // identical search. But do not silently drop the X slot either: emit
           // an explicit empty entry marked unavailable, so nobody mistakes the
-          // web result for X coverage.
+          // web result for X coverage. The note claims no web coverage for X —
+          // there is none in this entry.
           return [
             {
               source: 'x' as Source,
               fallbacks: [],
-              notes: [...notes, X_DEGRADE_NOTE],
+              notes: [...notes, xUnavailableNote(input.config, env)],
               unavailable: true,
             },
           ];
@@ -310,7 +335,7 @@ export function planRun(input: PlanInput): SourcePlan[] {
             source: 'x' as Source,
             engine: web.chain[0],
             fallbacks: web.chain.slice(1),
-            notes: [...notes, X_DEGRADE_NOTE],
+            notes: [...notes, xDegradeNote(input.config, env)],
           },
         ];
       }
@@ -321,7 +346,7 @@ export function planRun(input: PlanInput): SourcePlan[] {
           fallbacks: [...social.slice(1), ...web.chain],
           // Falling back to a web engine mid-run is still second-hand evidence,
           // so the caveat has to travel with the plan, not just the no-grok case.
-          degradeNote: X_DEGRADE_NOTE,
+          degradeNote: xDegradeNote(input.config, env),
           notes,
         },
       ];

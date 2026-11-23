@@ -5,6 +5,7 @@
 // verified without a key. Results are ranked pages with snippets and no
 // written answer, so the summary is mechanical.
 import { requestText } from '../util/timedRequest.ts';
+import { normalizePublishedAt } from '../util/paths.ts';
 import type { EngineOutput, EngineRequest, SearchEngine } from './index.ts';
 
 const DEFAULT_MAX_RESULTS = 10;
@@ -79,8 +80,9 @@ export async function executeYoucomSearch(options: EngineRequest): Promise<Engin
       snippet: r.snippets?.[0] || r.description || '',
       source: r.url ? safeHostname(r.url) : undefined,
     };
-    if (r.page_age) {
-      item.published_at = r.page_age;
+    const published = normalizePublishedAt(r.page_age);
+    if (published) {
+      item.published_at = published;
     }
     return item;
   });

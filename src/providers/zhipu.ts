@@ -18,6 +18,7 @@
 // no model in the loop, so summaries are mechanical. A coding-plan key is NOT
 // valid for the REST API: an unfunded account answers 429 with code 1113.
 import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { normalizePublishedAt } from '../util/paths.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
 import { resolveEndpoint } from './endpoint.ts';
@@ -199,8 +200,9 @@ async function searchRest(options: EngineRequest, apiKey: string, apiKeySecrets:
       snippet: r.content ?? '',
       source: r.link ? safeHostname(r.link) : undefined,
     };
-    if (r.publish_date) {
-      item.published_at = r.publish_date;
+    const published = normalizePublishedAt(r.publish_date);
+    if (published) {
+      item.published_at = published;
     }
     return item;
   });
@@ -469,8 +471,9 @@ async function searchMcp(options: EngineRequest, apiKey: string, apiKeySecrets: 
     if (row.refer) {
       item.refer = row.refer;
     }
-    if (row.publish_date) {
-      item.published_at = row.publish_date;
+    const published = normalizePublishedAt(row.publish_date);
+    if (published) {
+      item.published_at = published;
     }
     return item;
   });

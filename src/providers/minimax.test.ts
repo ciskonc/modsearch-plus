@@ -124,7 +124,7 @@ describe('minimax provider', () => {
         url: 'https://a.example.com/page',
         snippet: 'snippet a',
         source: 'a.example.com',
-        published_at: '2026/10/24 12:51:00',
+        published_at: '2026-10-24T12:51:00Z',
       },
       { title: 'B', url: 'not a url', snippet: 'snippet b', source: undefined },
     ]);
@@ -256,7 +256,7 @@ describe('minimax-websearch provider', () => {
         url: 'https://weather.example.com/sh',
         snippet: '阵雨 22℃',
         source: 'weather.example.com',
-        published_at: '2026/10/25 08:00:00',
+        published_at: '2026-10-25T08:00:00Z',
       },
       {
         title: '无日期结果',
